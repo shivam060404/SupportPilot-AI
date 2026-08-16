@@ -36,5 +36,5 @@ pytest-asyncio>=0.24.0
 httpx>=0.28.0   # AsyncClient for FastAPI tests
 
 # ── RAG (Phase 2) ─────────────────────────────────────────────────────────────
-# chromadb>=0.5.0
-# sentence-transformers>=3.0.0
+chromadb>=0.5.0
+sentence-transformers>=3.0.0

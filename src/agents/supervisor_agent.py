@@ -37,9 +37,16 @@ from agent_framework_openai import OpenAIChatClient
 from config import get_settings
 from src.agents.prompts import SYSTEM_PROMPT
 from src.observability.logger import get_logger
+from src.persistence.database import init_db
+from src.tools.search_knowledge_base import search_knowledge_base
+from src.tools.check_service_status import check_service_status
+from src.tools.create_ticket import create_ticket
+from src.tools.get_ticket_status import get_ticket_status
 
 log = get_logger(__name__)
 
+# Initialize DB tables
+init_db()
 
 class SupportAgent:
     """
@@ -62,6 +69,14 @@ class SupportAgent:
 
         # ── Session → HistoryProvider map (Phase 3 will persist to disk/DB) ──
         self._history_providers: dict[str, af.InMemoryHistoryProvider] = {}
+        
+        # ── Phase 2 Tools ──
+        self._tools = [
+            search_knowledge_base,
+            check_service_status,
+            create_ticket,
+            get_ticket_status
+        ]
 
         log.info(
             "support_agent_init",
@@ -88,8 +103,8 @@ class SupportAgent:
             name="SupportPilot",
             agent_instructions=SYSTEM_PROMPT,
             history_provider=history_provider,
-            # Phase 1: no tools yet — tools will be added in Phase 2
-            tools=None,
+            # Phase 2: Add tools
+            tools=self._tools,
             # Guard against runaway loops
             loop_max_iterations=10,
         )
