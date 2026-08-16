@@ -1,0 +1,40 @@
+# SupportPilot AI — Python Dependencies
+# Phase 1: Single Agent + LLM + FastAPI + Web UI
+#
+# Install:
+#   python3 -m venv .venv
+#   source .venv/bin/activate
+#   pip install -r requirements.txt
+
+# ── Microsoft Agent Framework ─────────────────────────────────────────────────
+agent-framework==1.14.0
+agent-framework-openai==1.13.0
+
+# ── LLM + API (Groq uses OpenAI-compatible endpoint) ─────────────────────────
+openai>=2.54.0
+
+# ── FastAPI & Server ──────────────────────────────────────────────────────────
+fastapi>=0.138.0
+uvicorn[standard]>=0.52.0
+python-multipart>=0.0.32
+sse-starlette>=2.0.0
+
+# ── Settings & Validation ─────────────────────────────────────────────────────
+pydantic>=2.13.0
+pydantic-settings>=2.15.0
+python-dotenv>=1.2.0
+
+# ── Persistence (Phase 2+) ────────────────────────────────────────────────────
+sqlalchemy>=2.0.0
+
+# ── Structured Logging ───────────────────────────────────────────────────────
+structlog>=25.0.0
+
+# ── Testing ──────────────────────────────────────────────────────────────────
+pytest>=8.0.0
+pytest-asyncio>=0.24.0
+httpx>=0.28.0   # AsyncClient for FastAPI tests
+
+# ── RAG (Phase 2) ─────────────────────────────────────────────────────────────
+# chromadb>=0.5.0
+# sentence-transformers>=3.0.0

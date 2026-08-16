@@ -1,0 +1,103 @@
+"""
+src/api/main.py
+────────────────
+FastAPI application entry point for SupportPilot AI.
+
+Architecture
+────────────
+Browser UI  →  FastAPI  →  MAF Agent  →  Groq LLaMA
+                              ↓
+                     (Phase 2+: RAG / Tools / MCP)
+
+Startup
+───────
+On startup the app creates a single SupportAgent instance and stores it in
+app.state so route handlers can access it without global state.
+
+Run locally
+───────────
+    uvicorn src.api.main:app --reload --port 8000
+"""
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+
+from config import get_settings
+from src.api.routes.chat import router as chat_router
+from src.observability.logger import configure_logging, get_logger
+
+log = get_logger(__name__)
+settings = get_settings()
+
+# ── Static files path ─────────────────────────────────────────────────────────
+STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "static"
+
+
+# ── Lifespan (startup / shutdown) ─────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    configure_logging()
+    log.info(
+        "supportpilot_startup",
+        app=settings.app_name,
+        env=settings.app_env,
+        model=settings.groq_model,
+        phase="Phase 1",
+    )
+
+    # Initialise the MAF agent once and share across requests
+    from src.agents.supervisor_agent import SupportAgent
+    app.state.agent = SupportAgent()
+
+    yield
+
+    log.info("supportpilot_shutdown")
+
+
+# ── Application ───────────────────────────────────────────────────────────────
+app = FastAPI(
+    title="SupportPilot AI",
+    description=(
+        "AI-powered IT Support Agent built with Microsoft Agent Framework (MAF), "
+        "Groq LLaMA, FastAPI, and RAG. Phase 1: Single Agent + LLM."
+    ),
+    version="1.0.0-phase1",
+    lifespan=lifespan,
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
+)
+
+# ── CORS ─────────────────────────────────────────────────────────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── API routes ────────────────────────────────────────────────────────────────
+app.include_router(chat_router, prefix="/api/v1")
+
+# ── Static files (web UI) ─────────────────────────────────────────────────────
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+# ── Root → serve Web UI ───────────────────────────────────────────────────────
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+async def root(request: Request) -> HTMLResponse:
+    """Serve the browser chat UI."""
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
+        return HTMLResponse(content=index_path.read_text())
+    return HTMLResponse(
+        content="<h1>SupportPilot AI</h1><p>UI not found. Run from project root.</p>"
+    )

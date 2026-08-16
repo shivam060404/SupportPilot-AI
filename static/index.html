@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SupportPilot AI — IT Support</title>
+  <meta name="description" content="AI-powered IT Support Agent built on Microsoft Agent Framework and Groq LLaMA. Get instant, grounded troubleshooting for VPN, password, Wi-Fi, apps, and more." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!--  APP SHELL                                                            -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <div class="app-shell">
+
+    <!-- ── SIDEBAR ───────────────────────────────────────────────────────── -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="20" cy="20" r="20" fill="url(#brandGrad)" />
+            <path d="M13 16.5c0-1.38 1.12-2.5 2.5-2.5h9c1.38 0 2.5 1.12 2.5 2.5v6c0 1.38-1.12 2.5-2.5 2.5h-9A2.5 2.5 0 0 1 13 22.5v-6Z" fill="white" fill-opacity=".9"/>
+            <circle cx="17" cy="19.5" r="1.5" fill="#6366f1"/>
+            <circle cx="23" cy="19.5" r="1.5" fill="#6366f1"/>
+            <path d="M17 24.5v2.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M23 24.5v2.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M17 27h6" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+            <defs>
+              <linearGradient id="brandGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#6366f1"/>
+                <stop offset="1" stop-color="#8b5cf6"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">SupportPilot</span>
+          <span class="brand-tag">AI</span>
+          <p class="brand-sub">IT Support Agent</p>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" aria-label="Issue categories">
+        <p class="nav-label">Categories</p>
+        <button class="nav-item active" data-category="VPN" id="cat-vpn" onclick="selectCategory('VPN', this)">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 1a4.5 4.5 0 0 0-4.5 4.5V9H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-.5V5.5A4.5 4.5 0 0 0 10 1Zm3 8V5.5a3 3 0 1 0-6 0V9h6Z" clip-rule="evenodd" /></svg>
+          VPN & Remote Access
+        </button>
+        <button class="nav-item" data-category="Password" id="cat-password" onclick="selectCategory('Password', this)">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 7a5 5 0 1 1 3.61 4.804l-1.903 1.903A1 1 0 0 1 9 14H8v1a1 1 0 0 1-1 1H6v1a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-2a1 1 0 0 1 .293-.707L7.196 9.39A5.002 5.002 0 0 1 8 7Zm5-3a.75.75 0 0 0 0 1.5A1.5 1.5 0 0 1 14.5 7 .75.75 0 0 0 16 7a3 3 0 0 0-3-3Z" clip-rule="evenodd" /></svg>
+          Password & Account
+        </button>
+        <button class="nav-item" data-category="WiFi" id="cat-wifi" onclick="selectCategory('WiFi', this)">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M16.72 6.84a1 1 0 0 1-1.44 1.39C13.9 6.86 12.04 6 10 6c-2.04 0-3.9.86-5.28 2.23a1 1 0 0 1-1.44-1.39C5.06 4.95 7.43 4 10 4s4.94.95 6.72 2.84ZM13.6 9.7a1 1 0 0 1-1.4 1.43A3.5 3.5 0 0 0 10 10.5a3.5 3.5 0 0 0-2.2.63 1 1 0 0 1-1.4-1.43A5.5 5.5 0 0 1 10 8.5a5.5 5.5 0 0 1 3.6 1.2Zm-2.1 2.95a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" /></svg>
+          Wi-Fi & Network
+        </button>
+        <button class="nav-item" data-category="Apps" id="cat-apps" onclick="selectCategory('Apps', this)">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M4.25 2A2.25 2.25 0 0 0 2 4.25v2.5A2.25 2.25 0 0 0 4.25 9h2.5A2.25 2.25 0 0 0 9 6.75v-2.5A2.25 2.25 0 0 0 6.75 2h-2.5Zm0 9A2.25 2.25 0 0 0 2 13.25v2.5A2.25 2.25 0 0 0 4.25 18h2.5A2.25 2.25 0 0 0 9 15.75v-2.5A2.25 2.25 0 0 0 6.75 11h-2.5Zm9-9A2.25 2.25 0 0 0 11 4.25v2.5A2.25 2.25 0 0 0 13.25 9h2.5A2.25 2.25 0 0 0 18 6.75v-2.5A2.25 2.25 0 0 0 15.75 2h-2.5Zm0 9A2.25 2.25 0 0 0 11 13.25v2.5A2.25 2.25 0 0 0 13.25 18h2.5A2.25 2.25 0 0 0 18 15.75v-2.5A2.25 2.25 0 0 0 15.75 11h-2.5Z" clip-rule="evenodd" /></svg>
+          Application Access
+        </button>
+        <button class="nav-item" data-category="Printer" id="cat-printer" onclick="selectCategory('Printer', this)">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5 2.75C5 1.784 5.784 1 6.75 1h6.5c.966 0 1.75.784 1.75 1.75v3.552c.377.046.752.097 1.126.153A2.212 2.212 0 0 1 18 8.653v4.097A2.25 2.25 0 0 1 15.75 15h-.241l.305 1.984A1.75 1.75 0 0 1 14.084 19H5.915a1.75 1.75 0 0 1-1.73-2.016L4.49 15H4.25A2.25 2.25 0 0 1 2 12.75V8.653c0-1.082.775-2.034 1.874-2.198.374-.056.749-.107 1.126-.153V2.75ZM6.5 2.5v3.29c.91-.051 1.823-.077 2.737-.077h1.526c.914 0 1.827.026 2.737.077V2.5h-7ZM7 9.5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H7Zm-.5 3.5a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1H7a.5.5 0 0 1-.5-.5Z" clip-rule="evenodd" /></svg>
+          Printer & Peripherals
+        </button>
+        <button class="nav-item" data-category="Email" id="cat-email" onclick="selectCategory('Email', this)">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M3 4a2 2 0 0 0-2 2v1.161l8.441 4.221a1.25 1.25 0 0 0 1.118 0L19 7.162V6a2 2 0 0 0-2-2H3Z"/><path d="m19 8.839-7.77 3.885a2.75 2.75 0 0 1-2.46 0L1 8.839V14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.839Z"/></svg>
+          Email Configuration
+        </button>
+        <button class="nav-item" data-category="Security" id="cat-security" onclick="selectCategory('Security', this)">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M9.661 2.237a.531.531 0 0 1 .678 0 11.947 11.947 0 0 0 7.078 2.749.5.5 0 0 1 .479.425c.069.52.104 1.05.104 1.589 0 5.162-3.26 9.563-7.834 11.256a.48.48 0 0 1-.332 0C5.26 16.563 2 12.162 2 7a11.8 11.8 0 0 1 .104-1.589.5.5 0 0 1 .48-.425 11.947 11.947 0 0 0 7.077-2.749Zm4.196 5.954a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd" /></svg>
+          Security Incidents
+        </button>
+        <button class="nav-item" data-category="Outages" id="cat-outages" onclick="selectCategory('Outages', this)">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd" /></svg>
+          Service Outages
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="new-chat-btn" id="newChatBtn" onclick="newChat()" aria-label="Start a new conversation">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M5.433 13.917l1.262-3.155A4 4 0 0 1 7.58 9.42l6.92-6.918a2.121 2.121 0 0 1 3 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 0 1-.65-.65Z"/><path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0 0 10 3H4.75A2.75 2.75 0 0 0 2 5.75v9.5A2.75 2.75 0 0 0 4.75 18h9.5A2.75 2.75 0 0 0 17 15.25V10a.75.75 0 0 0-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5Z"/></svg>
+          New Conversation
+        </button>
+      </div>
+    </aside>
+
+    <!-- ── MAIN CHAT AREA ─────────────────────────────────────────────────── -->
+    <main class="chat-main" id="chatMain">
+
+      <!-- Header -->
+      <header class="chat-header" role="banner">
+        <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" aria-label="Toggle sidebar">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20" aria-hidden="true"><path fill-rule="evenodd" d="M2 4.75A.75.75 0 0 1 2.75 4h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 4.75Zm0 10.5a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1-.75-.75ZM2 10a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 10Z" clip-rule="evenodd" /></svg>
+        </button>
+        <div class="header-info">
+          <h1 class="header-title">SupportPilot <span class="accent">AI</span></h1>
+          <p class="header-sub" id="headerSub">Describe your IT issue and I'll help you resolve it.</p>
+        </div>
+        <div class="header-badges">
+          <span class="badge badge-maf">MAF</span>
+          <span class="badge badge-groq">Groq LLaMA</span>
+          <span class="badge badge-phase">Phase 1</span>
+          <div class="status-dot" id="statusDot" title="Agent status"></div>
+        </div>
+      </header>
+
+      <!-- Messages -->
+      <div class="messages-wrapper" id="messagesWrapper" role="log" aria-live="polite" aria-label="Conversation">
+
+        <!-- Welcome card -->
+        <div class="welcome-card" id="welcomeCard">
+          <div class="welcome-icon">
+            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="48" height="48">
+              <circle cx="24" cy="24" r="24" fill="url(#wGrad)"/>
+              <path d="M16 21c0-1.66 1.34-3 3-3h10c1.66 0 3 1.34 3 3v7c0 1.66-1.34 3-3 3H19c-1.66 0-3-1.34-3-3v-7Z" fill="white" fill-opacity=".9"/>
+              <circle cx="21" cy="24.5" r="1.8" fill="#6366f1"/>
+              <circle cx="27" cy="24.5" r="1.8" fill="#6366f1"/>
+              <path d="M21 31v3" stroke="white" stroke-width="2" stroke-linecap="round"/>
+              <path d="M27 31v3" stroke="white" stroke-width="2" stroke-linecap="round"/>
+              <path d="M21 34h6" stroke="white" stroke-width="2" stroke-linecap="round"/>
+              <defs>
+                <linearGradient id="wGrad" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#6366f1"/><stop offset="1" stop-color="#8b5cf6"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <h2 class="welcome-title">Hello! I'm SupportPilot</h2>
+          <p class="welcome-text">Your AI IT Support Agent, powered by Microsoft Agent Framework and Groq LLaMA. I can help with VPN, passwords, network issues, app access, printers, email, and more.</p>
+          <div class="quick-prompts">
+            <p class="quick-label">Try asking:</p>
+            <div class="quick-grid">
+              <button class="quick-btn" onclick="sendQuick('My VPN keeps disconnecting every few minutes.')" id="qp-vpn">🔒 VPN keeps disconnecting</button>
+              <button class="quick-btn" onclick="sendQuick('I forgot my password and cannot log in to my account.')" id="qp-password">🔑 Forgot my password</button>
+              <button class="quick-btn" onclick="sendQuick('My Wi-Fi is very slow and keeps dropping.')" id="qp-wifi">📶 Wi-Fi is slow or dropping</button>
+              <button class="quick-btn" onclick="sendQuick('I cannot access the company email. Getting authentication error.')" id="qp-email">📧 Email authentication error</button>
+              <button class="quick-btn" onclick="sendQuick('Is there a known outage with any company services right now?')" id="qp-outage">⚠️ Check service outages</button>
+              <button class="quick-btn" onclick="sendQuick('I think I received a phishing email. What should I do?')" id="qp-security">🛡️ Report phishing email</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Messages inserted here by JS -->
+        <div id="messagesList"></div>
+
+        <!-- Typing indicator -->
+        <div class="typing-indicator" id="typingIndicator" style="display:none;" aria-label="Agent is thinking" aria-live="polite">
+          <div class="agent-avatar" aria-hidden="true">SP</div>
+          <div class="typing-bubble">
+            <span></span><span></span><span></span>
+          </div>
+          <p class="typing-label">SupportPilot is thinking…</p>
+        </div>
+
+        <div id="scrollAnchor"></div>
+      </div>
+
+      <!-- Input bar -->
+      <footer class="input-bar" role="contentinfo">
+        <div class="input-container">
+          <div class="category-chip" id="categoryChip">
+            <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12" aria-hidden="true"><path fill-rule="evenodd" d="M9.661 2.237a.531.531 0 0 1 .678 0 11.947 11.947 0 0 0 7.078 2.749.5.5 0 0 1 .479.425c.069.52.104 1.05.104 1.589 0 5.162-3.26 9.563-7.834 11.256a.48.48 0 0 1-.332 0C5.26 16.563 2 12.162 2 7a11.8 11.8 0 0 1 .104-1.589.5.5 0 0 1 .48-.425 11.947 11.947 0 0 0 7.077-2.749Z" clip-rule="evenodd" transform="scale(0.8)"/></svg>
+            <span id="categoryChipText">VPN</span>
+          </div>
+          <textarea
+            id="messageInput"
+            class="message-input"
+            placeholder="Describe your IT issue…"
+            rows="1"
+            maxlength="4096"
+            aria-label="Type your IT issue"
+            onkeydown="handleKeyDown(event)"
+            oninput="autoResize(this)"
+          ></textarea>
+          <button class="send-btn" id="sendBtn" onclick="sendMessage()" aria-label="Send message" disabled>
+            <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20" aria-hidden="true"><path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.414 4.926A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95 28.897 28.897 0 0 0 15.293-7.155.75.75 0 0 0 0-1.114A28.897 28.897 0 0 0 3.105 2.288Z"/></svg>
+          </button>
+        </div>
+        <div class="input-meta">
+          <span id="sessionDisplay" class="session-info"></span>
+          <span class="char-count" id="charCount">0 / 4096</span>
+        </div>
+      </footer>
+
+    </main>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!--  JAVASCRIPT                                                           -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <script>
+    // ── State ────────────────────────────────────────────────────────────────
+    let sessionId = null;
+    let currentCategory = 'VPN';
+    let isLoading = false;
+    const API_BASE = '/api/v1';
+
+    // ── DOM refs ─────────────────────────────────────────────────────────────
+    const messageInput   = document.getElementById('messageInput');
+    const sendBtn        = document.getElementById('sendBtn');
+    const messagesList   = document.getElementById('messagesList');
+    const welcomeCard    = document.getElementById('welcomeCard');
+    const typingIndicator = document.getElementById('typingIndicator');
+    const statusDot      = document.getElementById('statusDot');
+    const sessionDisplay = document.getElementById('sessionDisplay');
+    const charCount      = document.getElementById('charCount');
+    const categoryChipText = document.getElementById('categoryChipText');
+    const headerSub      = document.getElementById('headerSub');
+
+    // ── Init ─────────────────────────────────────────────────────────────────
+    window.onload = () => {
+      messageInput.focus();
+      checkHealth();
+      messageInput.addEventListener('input', onInputChange);
+    };
+
+    function onInputChange() {
+      const len = messageInput.value.trim().length;
+      charCount.textContent = `${messageInput.value.length} / 4096`;
+      sendBtn.disabled = (len === 0 || isLoading);
+      sendBtn.classList.toggle('ready', len > 0);
+    }
+
+    // ── Health check ─────────────────────────────────────────────────────────
+    async function checkHealth() {
+      try {
+        const res = await fetch(`${API_BASE}/health`);
+        if (res.ok) {
+          statusDot.classList.add('online');
+          statusDot.title = 'Agent online';
+        } else {
+          statusDot.classList.add('error');
+          statusDot.title = 'Agent error';
+        }
+      } catch {
+        statusDot.classList.add('offline');
+        statusDot.title = 'Cannot reach server';
+      }
+    }
+
+    // ── Category ─────────────────────────────────────────────────────────────
+    function selectCategory(cat, btn) {
+      currentCategory = cat;
+      categoryChipText.textContent = cat;
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      messageInput.placeholder = `Describe your ${cat} issue…`;
+      messageInput.focus();
+    }
+
+    // ── Keyboard handler ─────────────────────────────────────────────────────
+    function handleKeyDown(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (!sendBtn.disabled) sendMessage();
+      }
+    }
+
+    // ── Auto resize textarea ─────────────────────────────────────────────────
+    function autoResize(el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+    }
+
+    // ── Quick prompts ────────────────────────────────────────────────────────
+    function sendQuick(text) {
+      messageInput.value = text;
+      onInputChange();
+      sendMessage();
+    }
+
+    // ── New chat ─────────────────────────────────────────────────────────────
+    function newChat() {
+      sessionId = null;
+      messagesList.innerHTML = '';
+      welcomeCard.style.display = 'flex';
+      sessionDisplay.textContent = '';
+      messageInput.value = '';
+      messageInput.style.height = 'auto';
+      onInputChange();
+      messageInput.focus();
+      statusDot.className = 'status-dot';
+      checkHealth();
+    }
+
+    // ── Sidebar toggle ────────────────────────────────────────────────────────
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('collapsed');
+      document.getElementById('chatMain').classList.toggle('full-width');
+    }
+
+    // ── Send message ──────────────────────────────────────────────────────────
+    async function sendMessage() {
+      const text = messageInput.value.trim();
+      if (!text || isLoading) return;
+
+      // Hide welcome, show message
+      welcomeCard.style.display = 'none';
+      appendMessage('user', text);
+
+      // Reset input
+      messageInput.value = '';
+      messageInput.style.height = 'auto';
+      onInputChange();
+      setLoading(true);
+
+      try {
+        const payload = { message: text };
+        if (sessionId) payload.session_id = sessionId;
+
+        const res = await fetch(`${API_BASE}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: res.statusText }));
+          throw new Error(err.detail || `HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        sessionId = data.session_id;
+        sessionDisplay.textContent = `Session: ${sessionId.slice(0, 8)}…  •  Trace: ${data.trace_id.slice(0, 8)}…`;
+        appendMessage('agent', data.response, data.trace_id);
+
+      } catch (err) {
+        appendMessage('error', `⚠️ ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // ── Append message ────────────────────────────────────────────────────────
+    function appendMessage(role, text, traceId) {
+      const wrapper = document.createElement('div');
+      wrapper.className = `message-row ${role}`;
+
+      if (role === 'agent') {
+        const avatar = document.createElement('div');
+        avatar.className = 'agent-avatar';
+        avatar.textContent = 'SP';
+        wrapper.appendChild(avatar);
+      }
+
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble';
+
+      if (role === 'agent') {
+        bubble.innerHTML = formatAgentText(text);
+        if (traceId) {
+          const meta = document.createElement('div');
+          meta.className = 'message-meta';
+          meta.innerHTML = `<span class="mono">trace: ${traceId.slice(0,8)}</span>`;
+          bubble.appendChild(meta);
+        }
+      } else if (role === 'error') {
+        bubble.classList.add('error-bubble');
+        bubble.textContent = text;
+      } else {
+        bubble.textContent = text;
+      }
+
+      wrapper.appendChild(bubble);
+      messagesList.appendChild(wrapper);
+
+      // Animate in
+      requestAnimationFrame(() => wrapper.classList.add('visible'));
+      scrollToBottom();
+    }
+
+    // ── Format agent text (markdown-lite) ────────────────────────────────────
+    function formatAgentText(text) {
+      return text
+        // Status badges
+        .replace(/✅\s*RESOLVED/g, '<span class="badge-resolved">✅ RESOLVED</span>')
+        .replace(/🎫\s*TICKET CREATED/g, '<span class="badge-ticket">🎫 TICKET CREATED</span>')
+        .replace(/⏳\s*IN PROGRESS/g, '<span class="badge-progress">⏳ IN PROGRESS</span>')
+        .replace(/🚨\s*ESCALATED/g, '<span class="badge-escalated">🚨 ESCALATED</span>')
+        // Bold
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        // Numbered lists
+        .replace(/^(\d+)\.\s+(.+)$/gm, '<div class="step"><span class="step-num">$1</span><span>$2</span></div>')
+        // Bullet points
+        .replace(/^[-•]\s+(.+)$/gm, '<div class="bullet">• $1</div>')
+        // Newlines
+        .replace(/\n\n/g, '<br/><br/>')
+        .replace(/\n/g, '<br/>');
+    }
+
+    // ── Loading state ─────────────────────────────────────────────────────────
+    function setLoading(state) {
+      isLoading = state;
+      typingIndicator.style.display = state ? 'flex' : 'none';
+      sendBtn.disabled = state;
+      if (state) scrollToBottom();
+    }
+
+    // ── Scroll ────────────────────────────────────────────────────────────────
+    function scrollToBottom() {
+      document.getElementById('scrollAnchor').scrollIntoView({ behavior: 'smooth' });
+    }
+  </script>
+
+</body>
+</html>
