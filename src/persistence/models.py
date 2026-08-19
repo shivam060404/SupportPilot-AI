@@ -37,3 +37,12 @@ class AuditLog(Base):
     action = Column(String, index=True)
     details = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now)
+
+
+class SessionMessage(Base):
+    __tablename__ = "session_messages"
+
+    id = Column(String, primary_key=True, default=generate_uuid, index=True)
+    session_id = Column(String, index=True, nullable=False)
+    message_json = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now)

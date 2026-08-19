@@ -30,6 +30,9 @@ from fastapi.staticfiles import StaticFiles
 
 from config import get_settings
 from src.api.routes.chat import router as chat_router
+from src.api.routes.tickets import router as tickets_router
+from src.api.routes.sessions import router as sessions_router
+from src.api.routes.services import router as services_router
 from src.observability.logger import configure_logging, get_logger
 
 log = get_logger(__name__)
@@ -48,7 +51,7 @@ async def lifespan(app: FastAPI):
         app=settings.app_name,
         env=settings.app_env,
         model=settings.groq_model,
-        phase="Phase 1",
+        phase="Phase 3",
     )
 
     # Initialise the MAF agent once and share across requests
@@ -65,9 +68,9 @@ app = FastAPI(
     title="SupportPilot AI",
     description=(
         "AI-powered IT Support Agent built with Microsoft Agent Framework (MAF), "
-        "Groq LLaMA, FastAPI, and RAG. Phase 1: Single Agent + LLM."
+        "Groq LLaMA, FastAPI, and RAG. Phase 3: Sessions/State + Full API."
     ),
-    version="1.0.0-phase1",
+    version="1.0.0-phase3",
     lifespan=lifespan,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -85,6 +88,9 @@ app.add_middleware(
 
 # ── API routes ────────────────────────────────────────────────────────────────
 app.include_router(chat_router, prefix="/api/v1")
+app.include_router(tickets_router, prefix="/api/v1")
+app.include_router(sessions_router, prefix="/api/v1")
+app.include_router(services_router, prefix="/api/v1")
 
 # ── Static files (web UI) ─────────────────────────────────────────────────────
 if STATIC_DIR.exists():

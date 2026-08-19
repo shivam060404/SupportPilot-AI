@@ -42,6 +42,7 @@ from src.tools.search_knowledge_base import search_knowledge_base
 from src.tools.check_service_status import check_service_status
 from src.tools.create_ticket import create_ticket
 from src.tools.get_ticket_status import get_ticket_status
+from src.agents.sqlite_history_provider import SQLiteHistoryProvider
 
 log = get_logger(__name__)
 
@@ -67,8 +68,8 @@ class SupportAgent:
             base_url=settings.groq_base_url,
         )
 
-        # ── Session → HistoryProvider map (Phase 3 will persist to disk/DB) ──
-        self._history_providers: dict[str, af.InMemoryHistoryProvider] = {}
+        # ── Phase 3: SQLite History Provider ──
+        self._history_provider = SQLiteHistoryProvider()
         
         # ── Phase 2 Tools ──
         self._tools = [
@@ -89,20 +90,14 @@ class SupportAgent:
     ) -> tuple[af.Agent, af.AgentSession]:
         """
         Return (agent, session) for the given session_id.
-        A fresh InMemoryHistoryProvider is created once per session_id.
+        History is automatically retrieved and saved to SQLite via SQLiteHistoryProvider.
         """
-        if session_id not in self._history_providers:
-            self._history_providers[session_id] = af.InMemoryHistoryProvider()
-            log.debug("session_created", session_id=session_id)
-
-        history_provider = self._history_providers[session_id]
-
         agent = af.create_harness_agent(
             client=self._client,
             id="supportpilot-supervisor",
             name="SupportPilot",
             agent_instructions=SYSTEM_PROMPT,
-            history_provider=history_provider,
+            history_provider=self._history_provider,
             # Phase 2: Add tools
             tools=self._tools,
             # Guard against runaway loops

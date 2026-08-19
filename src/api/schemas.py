@@ -44,9 +44,40 @@ class ChatResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str = Field(default="ok")
     app_name: str
-    version: str = Field(default="1.0.0-phase1")
-    phase: str = Field(default="Phase 1 — Single Agent + LLM")
+    version: str = Field(default="1.0.0-phase3")
+    phase: str = Field(default="Phase 3 — Sessions/State + Full API")
 
+
+# ── /tickets ─────────────────────────────────────────────────────────────────
+
+class TicketResponse(BaseModel):
+    id: str
+    status: str
+    category: str
+    priority: str
+    summary: str
+    created_at: str
+    updated_at: str
+
+# ── /sessions ────────────────────────────────────────────────────────────────
+
+class MessageHistoryItem(BaseModel):
+    role: str
+    content: str
+    
+class SessionHistoryResponse(BaseModel):
+    session_id: str
+    messages: list[MessageHistoryItem]
+
+# ── /services ────────────────────────────────────────────────────────────────
+
+class ServiceStatusItem(BaseModel):
+    service: str
+    status: str
+    message: str
+    
+class ServicesStatusResponse(BaseModel):
+    services: list[ServiceStatusItem]
 
 # ── Error ────────────────────────────────────────────────────────────────────
 

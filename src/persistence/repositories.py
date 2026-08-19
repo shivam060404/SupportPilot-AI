@@ -65,3 +65,27 @@ class AuditLogRepository:
             db.commit()
             db.refresh(log_entry)
             return log_entry
+
+
+class SessionRepository:
+    @staticmethod
+    def save_messages(session_id: str, messages_json: list[str]) -> None:
+        """Save a list of serialized messages for a session."""
+        from src.persistence.models import SessionMessage
+        with SessionLocal() as db:
+            for msg_json in messages_json:
+                session_msg = SessionMessage(
+                    session_id=session_id,
+                    message_json=msg_json
+                )
+                db.add(session_msg)
+            db.commit()
+
+    @staticmethod
+    def get_messages(session_id: str) -> list[str]:
+        """Retrieve serialized messages for a session, ordered by creation time."""
+        from src.persistence.models import SessionMessage
+        with SessionLocal() as db:
+            rows = db.query(SessionMessage).filter(SessionMessage.session_id == session_id).order_by(SessionMessage.created_at).all()
+            return [row.message_json for row in rows]
+
