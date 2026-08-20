@@ -43,7 +43,7 @@ from src.tools.check_service_status import check_service_status
 from src.tools.create_ticket import create_ticket
 from src.tools.get_ticket_status import get_ticket_status
 from src.agents.sqlite_history_provider import SQLiteHistoryProvider
-from src.agents.hr_agent import create_hr_agent
+from src.agents.escalation_agent import create_escalation_agent
 from agent_framework import Executor, WorkflowBuilder, WorkflowContext, handler, Message, AgentSession
 
 log = get_logger(__name__)
@@ -57,7 +57,7 @@ class TriageExecutor(Executor):
         # Just pass the messages forward to be evaluated by the edge conditions
         await ctx.yield_output(messages)
 
-def is_hr_query(messages: list[Message]) -> bool:
+def is_escalation_query(messages: list[Message]) -> bool:
     if not messages:
         return False
     # Check the last user message text
@@ -65,14 +65,14 @@ def is_hr_query(messages: list[Message]) -> bool:
         content = messages[-1].text.lower()
     except Exception:
         content = str(messages[-1]).lower()
-    return any(kw in content for kw in ["pto", "leave", "employee", "hr", "balance"])
+    return any(kw in content for kw in ["account", "password", "locked", "escalate", "manager", "ad"])
 
-def is_it_query(messages: list[Message]) -> bool:
-    return not is_hr_query(messages)
+def is_tier1_query(messages: list[Message]) -> bool:
+    return not is_escalation_query(messages)
 
 class SupportAgent:
     """
-    Orchestrates the IT Support and HR Agents via MAF WorkflowBuilder.
+    Orchestrates the Tier 1 IT Support and Tier 2 Escalation Agents via MAF WorkflowBuilder.
     State is persisted to SQLite via SQLiteHistoryProvider.
     """
 
@@ -105,14 +105,14 @@ class SupportAgent:
         it_agent = af.create_harness_agent(
             client=self._client,
             id="supportpilot-it",
-            name="IT Support",
+            name="Tier 1 Support",
             agent_instructions=SYSTEM_PROMPT,
             history_provider=self._history_provider,
             tools=it_tools,
             loop_max_iterations=10,
         )
         
-        hr_agent = create_hr_agent(
+        escalation_agent = create_escalation_agent(
             client=self._client,
             history_provider=self._history_provider,
         )
@@ -122,8 +122,8 @@ class SupportAgent:
         # ── Build Workflow ──
         workflow = (
             WorkflowBuilder(start_executor=triage)
-            .add_edge(triage, hr_agent, condition=is_hr_query)
-            .add_edge(triage, it_agent, condition=is_it_query)
+            .add_edge(triage, escalation_agent, condition=is_escalation_query)
+            .add_edge(triage, it_agent, condition=is_tier1_query)
             .build()
         )
         

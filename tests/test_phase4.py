@@ -17,23 +17,23 @@ from src.agents.supervisor_agent import SupportAgent
 os.environ.setdefault("GROQ_API_KEY", "test-key-not-real")
 
 @pytest.mark.asyncio
-async def test_workflow_routing_hr():
+async def test_workflow_routing_escalation():
     # We will just verify the TriageExecutor edge conditions.
-    from src.agents.supervisor_agent import is_hr_query, is_it_query
+    from src.agents.supervisor_agent import is_escalation_query, is_tier1_query
     
     class MockMessage:
         def __init__(self, text: str):
             self.text = text
             
-    # HR query
-    msg_hr = MockMessage(text="What is my PTO balance?")
-    assert is_hr_query([msg_hr]) == True
-    assert is_it_query([msg_hr]) == False
+    # Escalation query
+    msg_esc = MockMessage(text="My account is locked")
+    assert is_escalation_query([msg_esc]) == True
+    assert is_tier1_query([msg_esc]) == False
     
-    # IT query
+    # IT Tier 1 query
     msg_it = MockMessage(text="My VPN is broken")
-    assert is_hr_query([msg_it]) == False
-    assert is_it_query([msg_it]) == True
+    assert is_escalation_query([msg_it]) == False
+    assert is_tier1_query([msg_it]) == True
 
 def test_mcp_server_exports():
     """Verify that the MCP server script defines the tools."""
@@ -43,5 +43,5 @@ def test_mcp_server_exports():
     spec.loader.exec_module(mcp_module)
     
     assert hasattr(mcp_module, "mcp")
-    assert hasattr(mcp_module, "get_employee_status")
-    assert hasattr(mcp_module, "get_pto_balance")
+    assert hasattr(mcp_module, "check_account_status")
+    assert hasattr(mcp_module, "get_manager_info")
