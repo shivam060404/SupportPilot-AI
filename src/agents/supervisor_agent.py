@@ -65,7 +65,7 @@ def is_escalation_query(messages: list[Message]) -> bool:
         content = messages[-1].text.lower()
     except Exception:
         content = str(messages[-1]).lower()
-    return any(kw in content for kw in ["account", "password", "locked", "escalate", "manager", "ad"])
+    return any(kw in content for kw in ["account", "password", "locked", "escalate", "manager", "ad", "unlock"])
 
 def is_tier1_query(messages: list[Message]) -> bool:
     return not is_escalation_query(messages)

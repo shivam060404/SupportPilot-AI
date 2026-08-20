@@ -1,7 +1,7 @@
 """
-tests/test_phase4.py
+tests/test_workflow.py
 ─────────────────────
-Phase 4 verification tests.
+Workflow verification tests.
   - Test MCP server directly
   - Test Workflow routing
 """
@@ -26,7 +26,7 @@ async def test_workflow_routing_escalation():
             self.text = text
             
     # Escalation query
-    msg_esc = MockMessage(text="My account is locked")
+    msg_esc = MockMessage(text="Can you please unlock my account?")
     assert is_escalation_query([msg_esc]) == True
     assert is_tier1_query([msg_esc]) == False
     
@@ -45,3 +45,4 @@ def test_mcp_server_exports():
     assert hasattr(mcp_module, "mcp")
     assert hasattr(mcp_module, "check_account_status")
     assert hasattr(mcp_module, "get_manager_info")
+    assert hasattr(mcp_module, "unlock_account")

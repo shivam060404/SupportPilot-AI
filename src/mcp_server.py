@@ -37,6 +37,18 @@ def get_manager_info(email: str) -> str:
         return "No manager found. User is the CEO."
     return f"manager.of.{email.split('@')[0]}@company.com"
 
+@mcp.tool()
+def unlock_account(email: str) -> str:
+    """
+    Unlock a user's Active Directory account. 
+    This is a sensitive action that MUST be approved by the human first.
+    
+    Args:
+        email: The employee's company email address.
+    """
+    # In a real system this would hit the AD API
+    return f"SUCCESS: The account for {email} has been successfully unlocked."
+
 if __name__ == "__main__":
     # Run the server on standard I/O
     mcp.run(transport="stdio")
