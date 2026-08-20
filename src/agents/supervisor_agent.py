@@ -43,36 +43,52 @@ from src.tools.check_service_status import check_service_status
 from src.tools.create_ticket import create_ticket
 from src.tools.get_ticket_status import get_ticket_status
 from src.agents.sqlite_history_provider import SQLiteHistoryProvider
+from src.agents.hr_agent import create_hr_agent
+from agent_framework import Executor, WorkflowBuilder, WorkflowContext, handler, Message, AgentSession
 
 log = get_logger(__name__)
 
 # Initialize DB tables
 init_db()
 
+class TriageExecutor(Executor):
+    @handler
+    async def process(self, messages: list[Message], ctx: WorkflowContext) -> None:
+        # Just pass the messages forward to be evaluated by the edge conditions
+        await ctx.yield_output(messages)
+
+def is_hr_query(messages: list[Message]) -> bool:
+    if not messages:
+        return False
+    # Check the last user message text
+    try:
+        content = messages[-1].text.lower()
+    except Exception:
+        content = str(messages[-1]).lower()
+    return any(kw in content for kw in ["pto", "leave", "employee", "hr", "balance"])
+
+def is_it_query(messages: list[Message]) -> bool:
+    return not is_hr_query(messages)
+
 class SupportAgent:
     """
-    Wraps a MAF harness agent with Groq LLaMA and manages per-session
-    history using InMemoryHistoryProvider instances.
-
-    Thread-safety: each session gets its own InMemoryHistoryProvider,
-    so concurrent requests to different sessions are isolated.
+    Orchestrates the IT Support and HR Agents via MAF WorkflowBuilder.
+    State is persisted to SQLite via SQLiteHistoryProvider.
     """
 
     def __init__(self) -> None:
         settings = get_settings()
 
-        # ── MAF Chat Client pointing at Groq's OpenAI-compatible endpoint ────
         self._client = OpenAIChatClient(
             model=settings.groq_model,
             api_key=settings.groq_api_key,
             base_url=settings.groq_base_url,
         )
 
-        # ── Phase 3: SQLite History Provider ──
         self._history_provider = SQLiteHistoryProvider()
         
-        # ── Phase 2 Tools ──
-        self._tools = [
+        # ── Phase 2 Tools for IT Agent ──
+        it_tools = [
             search_knowledge_base,
             check_service_status,
             create_ticket,
@@ -85,28 +101,44 @@ class SupportAgent:
             base_url=settings.groq_base_url,
         )
 
+        # ── Build Agents ──
+        it_agent = af.create_harness_agent(
+            client=self._client,
+            id="supportpilot-it",
+            name="IT Support",
+            agent_instructions=SYSTEM_PROMPT,
+            history_provider=self._history_provider,
+            tools=it_tools,
+            loop_max_iterations=10,
+        )
+        
+        hr_agent = create_hr_agent(
+            client=self._client,
+            history_provider=self._history_provider,
+        )
+        
+        triage = TriageExecutor(id="triage")
+
+        # ── Build Workflow ──
+        workflow = (
+            WorkflowBuilder(start_executor=triage)
+            .add_edge(triage, hr_agent, condition=is_hr_query)
+            .add_edge(triage, it_agent, condition=is_it_query)
+            .build()
+        )
+        
+        # Convert workflow to an agent interface so we can call .run()
+        self.workflow_agent = workflow.as_agent(name="SupportPilot")
+
     def _get_or_create_session(
         self, session_id: str
     ) -> tuple[af.Agent, af.AgentSession]:
         """
-        Return (agent, session) for the given session_id.
-        History is automatically retrieved and saved to SQLite via SQLiteHistoryProvider.
+        Return the workflow agent and a session for the given session_id.
+        History is automatically retrieved and saved to SQLite.
         """
-        agent = af.create_harness_agent(
-            client=self._client,
-            id="supportpilot-supervisor",
-            name="SupportPilot",
-            agent_instructions=SYSTEM_PROMPT,
-            history_provider=self._history_provider,
-            # Phase 2: Add tools
-            tools=self._tools,
-            # Guard against runaway loops
-            loop_max_iterations=10,
-        )
-
-        # MAF AgentSession ties the run to the history provider's stored thread
         session = af.AgentSession(session_id=session_id)
-        return agent, session
+        return self.workflow_agent, session
 
     async def chat(
         self,
