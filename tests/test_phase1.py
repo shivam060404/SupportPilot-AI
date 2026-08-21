@@ -62,7 +62,7 @@ async def test_health_endpoint():
     data = res.json()
     assert data["status"] == "ok"
     assert "SupportPilot" in data["app_name"]
-    assert "Phase 1" in data["phase"]
+    assert "Phase 6" in data["phase"]
 
 
 @pytest.mark.asyncio

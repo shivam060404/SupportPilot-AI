@@ -68,4 +68,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
 )
 async def health() -> HealthResponse:
     settings = get_settings()
-    return HealthResponse(app_name=settings.app_name)
+    return HealthResponse(
+        app_name=settings.app_name,
+        env=settings.app_env
+    )

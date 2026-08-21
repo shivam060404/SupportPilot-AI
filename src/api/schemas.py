@@ -36,16 +36,18 @@ class ChatResponse(BaseModel):
     session_id: str = Field(description="Session ID to use in follow-up requests.")
     response: str = Field(description="Agent's answer / troubleshooting steps.")
     trace_id: str = Field(description="Correlation ID for this request (for logs).")
-    phase: str = Field(default="Phase 1", description="Current system phase.")
+    phase: str = Field(default="Phase 6", description="Current system phase.")
 
 
 # ── /health ───────────────────────────────────────────────────────────────────
 
 class HealthResponse(BaseModel):
+    """Response model for the health check endpoint."""
+
     status: str = Field(default="ok")
     app_name: str
-    version: str = Field(default="1.0.0-phase3")
-    phase: str = Field(default="Phase 3 — Sessions/State + Full API")
+    env: str
+    phase: str = Field(default="Phase 6 — Tests/Observability/Docker")
 
 
 # ── /tickets ─────────────────────────────────────────────────────────────────

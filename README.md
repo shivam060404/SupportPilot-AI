@@ -23,11 +23,11 @@ Microsoft Agent Framework (MAF 1.14.0)
 | Phase | Status | Focus |
 |-------|--------|-------|
 | **Phase 1** | ✅ Complete | Single MAF Agent + Groq + FastAPI + Web UI |
-| Phase 2 | 🔜 | RAG + Knowledge Base + Tools + SQLite |
-| Phase 3 | 🔜 | Sessions/State + Full API |
-| Phase 4 | 🔜 | MCP + Incident Workflow |
-| Phase 5 | 🔜 | Human Approval + Escalation |
-| Phase 6 | 🔜 | Tests + Observability + Docker |
+| **Phase 2** | ✅ Complete | RAG + Knowledge Base + Tools + SQLite |
+| **Phase 3** | ✅ Complete | Sessions/State + Full API |
+| **Phase 4** | ✅ Complete | MCP + Incident Workflow |
+| **Phase 5** | ✅ Complete | Human Approval + Escalation |
+| **Phase 6** | ✅ Complete | Tests + Observability + Docker |
 
 ---
 

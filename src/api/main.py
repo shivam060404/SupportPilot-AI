@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
         app=settings.app_name,
         env=settings.app_env,
         model=settings.groq_model,
-        phase="Phase 3",
+        phase="Phase 6",
     )
 
     # Initialise the MAF agent once and share across requests
@@ -68,16 +68,19 @@ app = FastAPI(
     title="SupportPilot AI",
     description=(
         "AI-powered IT Support Agent built with Microsoft Agent Framework (MAF), "
-        "Groq LLaMA, FastAPI, and RAG. Phase 3: Sessions/State + Full API."
+        "Groq LLaMA, FastAPI, and RAG. Phase 6: Tests/Observability/Docker."
     ),
-    version="1.0.0-phase3",
+    version="1.0.0-phase6",
     lifespan=lifespan,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
 )
 
-# ── CORS ─────────────────────────────────────────────────────────────────────
+from src.api.middleware import LoggingMiddleware
+
+# ── CORS & Middleware ─────────────────────────────────────────────────────────
+app.add_middleware(LoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
