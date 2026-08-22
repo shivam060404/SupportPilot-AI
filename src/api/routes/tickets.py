@@ -1,13 +1,60 @@
 """
 src/api/routes/tickets.py
 ─────────────────────────
-Endpoints for ticket management.
+Endpoints for ticket management (list, create, get).
 """
-from fastapi import APIRouter, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Query
+
+from src.api.schemas import TicketCreateRequest, TicketResponse, ErrorResponse
 from src.persistence.repositories import TicketRepository
-from src.api.schemas import TicketResponse, ErrorResponse
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
+
+
+def _to_response(t) -> TicketResponse:
+    return TicketResponse(
+        id=t.id,
+        status=t.status,
+        category=t.category,
+        priority=t.priority,
+        summary=t.summary,
+        created_at=t.created_at.isoformat() if t.created_at else "",
+        updated_at=t.updated_at.isoformat() if t.updated_at else "",
+    )
+
+
+@router.get(
+    "",
+    response_model=list[TicketResponse],
+    summary="List tickets (optionally by status)",
+)
+async def list_tickets(
+    status: Optional[str] = Query(default=None, description="OPEN | IN_PROGRESS | RESOLVED"),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[TicketResponse]:
+    return [_to_response(t) for t in TicketRepository.list_tickets(status=status, limit=limit)]
+
+
+@router.post(
+    "",
+    response_model=TicketResponse,
+    status_code=201,
+    responses={422: {"model": ErrorResponse}},
+    summary="Create a ticket directly (IT staff)",
+)
+async def create_ticket(body: TicketCreateRequest) -> TicketResponse:
+    try:
+        ticket = TicketRepository.create_ticket(
+            summary=body.summary,
+            category=body.category,
+            priority=body.priority,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return _to_response(ticket)
+
 
 @router.get(
     "/{ticket_id}",
@@ -19,13 +66,4 @@ async def get_ticket(ticket_id: str) -> TicketResponse:
     ticket = TicketRepository.get_ticket(ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
-        
-    return TicketResponse(
-        id=ticket.id,
-        status=ticket.status,
-        category=ticket.category,
-        priority=ticket.priority,
-        summary=ticket.summary,
-        created_at=ticket.created_at.isoformat() if ticket.created_at else "",
-        updated_at=ticket.updated_at.isoformat() if ticket.updated_at else ""
-    )
+    return _to_response(ticket)

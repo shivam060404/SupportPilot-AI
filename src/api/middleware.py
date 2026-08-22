@@ -13,16 +13,19 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from src.observability.logger import bind_trace_context, clear_trace_context, get_logger
+from src.observability.request_context import set_request_context, clear_request_context
 
 log = get_logger(__name__)
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         trace_id = request.headers.get("x-trace-id") or str(uuid.uuid4())
-        
+        request.state.trace_id = trace_id
+
         # We can extract session_id from body if we wanted to read it, but for a middleware
         # it's better to just bind the trace_id.
         bind_trace_context(trace_id=trace_id)
+        set_request_context(trace_id=trace_id)
         
         start_time = time.perf_counter()
         
@@ -55,3 +58,4 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             raise
         finally:
             clear_trace_context()
+            clear_request_context()

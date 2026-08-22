@@ -12,7 +12,11 @@ import pytest
 import pytest_asyncio
 import agent_framework as af
 
-from src.agents.supervisor_agent import SupportAgent
+from src.agents.supervisor_agent import (
+    SupportAgent,
+    is_escalation_query,
+    is_tier1_query,
+)
 
 os.environ.setdefault("GROQ_API_KEY", "test-key-not-real")
 
@@ -36,13 +40,50 @@ async def test_workflow_routing_escalation():
     assert is_tier1_query([msg_it]) == True
 
 def test_mcp_server_exports():
-    """Verify that the MCP server script defines the tools."""
+    """Verify that the MCP server script defines the read-only AD tools."""
     import importlib.util
     spec = importlib.util.spec_from_file_location("mcp_server", "src/mcp_server.py")
     mcp_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mcp_module)
-    
+
     assert hasattr(mcp_module, "mcp")
-    assert hasattr(mcp_module, "check_account_status")
-    assert hasattr(mcp_module, "get_manager_info")
-    assert hasattr(mcp_module, "unlock_account")
+    assert hasattr(mcp_module, "ad_check_account_status")
+    assert hasattr(mcp_module, "ad_get_manager_info")
+
+
+def test_mcp_server_does_not_expose_unlock():
+    """The sensitive unlock capability must NOT be reachable via MCP tools."""
+    src_text = open("src/mcp_server.py").read()
+    assert "@mcp.tool" in src_text
+    assert 'def ad_check_account_status' in src_text
+    assert 'def ad_get_manager_info' in src_text
+    assert '@mcp.tool()\ndef unlock_account' not in src_text
+
+
+# ── Routing conditions (deterministic pre-triage) ─────────────────────────────
+
+class _M:
+    def __init__(self, t): self.text = t
+
+
+@pytest.mark.parametrize("text", [
+    "My account is locked, please help",
+    "Can you unlock my account?",
+    "I need admin rights for this software install",
+    "Who is my manager? I need their sign-off",
+    "Please escalate this to someone who can help",
+])
+def test_escalation_routing(text):
+    assert is_escalation_query([_M(text)]) is True
+    assert is_tier1_query([_M(text)]) is False
+
+
+@pytest.mark.parametrize("text", [
+    "My VPN keeps disconnecting",
+    "I forgot my password and cannot log in",
+    "Wi-Fi is slow on my laptop",
+    "I cannot access Jira today",
+])
+def test_tier1_routing(text):
+    assert is_escalation_query([_M(text)]) is False
+    assert is_tier1_query([_M(text)]) is True

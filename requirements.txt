@@ -38,3 +38,6 @@ httpx>=0.28.0   # AsyncClient for FastAPI tests
 # ── RAG (Phase 2) ─────────────────────────────────────────────────────────────
 chromadb>=0.5.0
 sentence-transformers>=3.0.0
+
+# ── MCP (Phase 4) — stdio AD server; FastMCP lives in mcp<2 ──────────────────
+mcp>=1.2.0,<2.0.0

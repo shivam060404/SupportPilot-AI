@@ -5,9 +5,11 @@ Tool to retrieve an IT support ticket's status.
 """
 import agent_framework as af
 import json
+from src.observability.tooltrace import traced_tool
 from src.persistence.repositories import TicketRepository
 
 @af.tool(name="get_ticket_status", description="Retrieve the status and details of an existing IT support ticket.")
+@traced_tool("get_ticket_status")
 def get_ticket_status(ticket_id: str) -> str:
     """
     Retrieve information about a specific ticket.

@@ -103,7 +103,11 @@
         <div class="header-badges">
           <span class="badge badge-maf">MAF</span>
           <span class="badge badge-groq">Groq LLaMA</span>
-          <span class="badge badge-phase">Phase 1</span>
+          <button class="approval-bell" id="approvalBell" onclick="toggleApprovalPanel()" title="Pending approvals" style="display:none;">
+            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M8 16a2 2 0 0 0 4 0H8Z"/><path fill-rule="evenodd" d="M10 2a5 5 0 0 0-5 5v2.586l-.707.707A1 1 0 0 0 4 11h12a1 1 0 0 0 .707-1.707L16 9.586V7a5 5 0 0 0-5-5Z" clip-rule="evenodd"/></svg>
+            <span class="bell-count" id="bellCount">0</span>
+          </button>
+          <span class="badge badge-phase">v1.0</span>
           <div class="status-dot" id="statusDot" title="Agent status"></div>
         </div>
       </header>
@@ -189,6 +193,18 @@
     </main>
   </div>
 
+  <!-- ── APPROVALS PANEL (human-in-the-loop) ─────────────────────────────── -->
+  <div class="approval-panel" id="approvalPanel" style="display:none;" role="dialog" aria-label="Pending approvals">
+    <div class="approval-panel-header">
+      <h3>Pending Approvals</h3>
+      <button class="panel-close" onclick="toggleApprovalPanel()" aria-label="Close">✕</button>
+    </div>
+    <p class="approval-panel-sub">Sensitive actions require a human decision. The agent is blocked until you decide.</p>
+    <div id="approvalList" class="approval-list">
+      <p class="approval-empty" id="approvalEmpty">No pending approvals for this session.</p>
+    </div>
+  </div>
+
   <!-- ══════════════════════════════════════════════════════════════════════ -->
   <!--  JAVASCRIPT                                                           -->
   <!-- ══════════════════════════════════════════════════════════════════════ -->
@@ -216,7 +232,87 @@
       messageInput.focus();
       checkHealth();
       messageInput.addEventListener('input', onInputChange);
+      restoreSession();
+      setInterval(pollApprovals, 5000);
     };
+
+    // ── Session restore (multi-turn memory across reloads) ──────────────────
+    function restoreSession() {
+      const saved = localStorage.getItem('sp_session');
+      if (!saved) return;
+      fetch(`${API_BASE}/sessions/${saved}/history`)
+        .then(r => (r.ok ? r.json() : null))
+        .then(data => {
+          if (!data || !data.messages || data.messages.length === 0) {
+            localStorage.removeItem('sp_session');
+            return;
+          }
+          sessionId = saved;
+          welcomeCard.style.display = 'none';
+          sessionDisplay.textContent = `Session: ${sessionId.slice(0, 8)}…`;
+          data.messages.forEach(m => appendMessage(m.role === 'user' ? 'user' : 'agent', m.content));
+        })
+        .catch(() => {});
+    }
+
+    // ── Approvals (human-in-the-loop) ────────────────────────────────────────
+    let approvalPanelOpen = false;
+
+    async function pollApprovals() {
+      if (!sessionId) return;
+      try {
+        const res = await fetch(`${API_BASE}/approvals?session_id=${encodeURIComponent(sessionId)}&status=PENDING`);
+        if (!res.ok) return;
+        const data = await res.json();
+        renderApprovals(data.approvals || []);
+      } catch { /* offline — retry on next tick */ }
+    }
+
+    function renderApprovals(approvals) {
+      const bell = document.getElementById('approvalBell');
+      const count = document.getElementById('bellCount');
+      const list = document.getElementById('approvalList');
+      const empty = document.getElementById('approvalEmpty');
+
+      bell.style.display = approvals.length > 0 ? 'inline-flex' : 'none';
+      count.textContent = approvals.length;
+
+      list.querySelectorAll('.approval-card').forEach(el => el.remove());
+      empty.style.display = approvals.length === 0 && sessionId ? 'block' : 'none';
+
+      approvals.forEach(a => {
+        const card = document.createElement('div');
+        card.className = 'approval-card';
+        card.innerHTML = `
+          <div class="approval-title">🔐 ${a.action}</div>
+          <div class="approval-target mono">${a.target}</div>
+          ${a.rationale ? `<div class="approval-rationale">${a.rationale}</div>` : ''}
+          <div class="approval-actions">
+            <button class="btn-approve" onclick="decideApproval('${a.id}','approve')">✓ Approve</button>
+            <button class="btn-reject" onclick="decideApproval('${a.id}','reject')">✕ Reject</button>
+          </div>`;
+        list.appendChild(card);
+      });
+    }
+
+    async function decideApproval(id, decision) {
+      try {
+        const res = await fetch(`${API_BASE}/approvals/${id}/${decision}`, { method: 'POST' });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `HTTP ${res.status}`);
+        await pollApprovals();
+        appendMessage('info', decision === 'approve'
+          ? '✅ Approval granted — tell SupportPilot to continue.'
+          : '⛔ Approval rejected — SupportPilot will be informed.');
+      } catch (err) {
+        appendMessage('error', `⚠️ ${err.message}`);
+      }
+    }
+
+    function toggleApprovalPanel() {
+      approvalPanelOpen = !approvalPanelOpen;
+      document.getElementById('approvalPanel').style.display = approvalPanelOpen ? 'block' : 'none';
+      if (approvalPanelOpen) pollApprovals();
+    }
 
     function onInputChange() {
       const len = messageInput.value.trim().length;
@@ -276,9 +372,11 @@
     // ── New chat ─────────────────────────────────────────────────────────────
     function newChat() {
       sessionId = null;
+      localStorage.removeItem('sp_session');
       messagesList.innerHTML = '';
       welcomeCard.style.display = 'flex';
       sessionDisplay.textContent = '';
+      renderApprovals([]);
       messageInput.value = '';
       messageInput.style.height = 'auto';
       onInputChange();
@@ -311,6 +409,7 @@
       try {
         const payload = { message: text };
         if (sessionId) payload.session_id = sessionId;
+        if (currentCategory) payload.category = currentCategory;
 
         const res = await fetch(`${API_BASE}/chat`, {
           method: 'POST',
@@ -325,8 +424,10 @@
 
         const data = await res.json();
         sessionId = data.session_id;
+        localStorage.setItem('sp_session', sessionId);
         sessionDisplay.textContent = `Session: ${sessionId.slice(0, 8)}…  •  Trace: ${data.trace_id.slice(0, 8)}…`;
-        appendMessage('agent', data.response, data.trace_id);
+        appendMessage('agent', data.response, data.trace_id, data.tool_trace || [], data.sources || []);
+        pollApprovals();
 
       } catch (err) {
         appendMessage('error', `⚠️ ${err.message}`);
@@ -336,9 +437,9 @@
     }
 
     // ── Append message ────────────────────────────────────────────────────────
-    function appendMessage(role, text, traceId) {
+    function appendMessage(role, text, traceId, toolTrace, sources) {
       const wrapper = document.createElement('div');
-      wrapper.className = `message-row ${role}`;
+      wrapper.className = `message-row ${role === 'user' ? 'user' : role === 'agent' ? 'agent' : role}`;
 
       if (role === 'agent') {
         const avatar = document.createElement('div');
@@ -352,6 +453,8 @@
 
       if (role === 'agent') {
         bubble.innerHTML = formatAgentText(text);
+        renderSources(bubble, sources);
+        renderToolTrace(bubble, toolTrace);
         if (traceId) {
           const meta = document.createElement('div');
           meta.className = 'message-meta';
@@ -363,6 +466,7 @@
         bubble.textContent = text;
       } else {
         bubble.textContent = text;
+        wrapper.classList.add(role === 'info' ? 'info-row' : 'user');
       }
 
       wrapper.appendChild(bubble);
@@ -373,14 +477,57 @@
       scrollToBottom();
     }
 
+    // ── Render RAG sources under an agent reply ─────────────────────────────
+    function renderSources(bubble, sources) {
+      if (!sources || sources.length === 0) return;
+      const seen = new Set();
+      const box = document.createElement('div');
+      box.className = 'sources-box';
+      box.innerHTML = '<p class="sources-label">📚 Grounded in:</p>';
+      sources.forEach(s => {
+        const key = `${s.title}|${s.category}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        const row = document.createElement('div');
+        row.className = 'source-item';
+        row.innerHTML = `<span>${s.title}</span><span class="mono score">${s.score != null ? (s.score * 100).toFixed(0) + '%' : ''}</span>`;
+        box.appendChild(row);
+      });
+      bubble.appendChild(box);
+    }
+
+    // ── Render tool-call chips (what the agent actually did) ─────────────────
+    function renderToolTrace(bubble, toolTrace) {
+      if (!toolTrace || toolTrace.length === 0) return;
+      // Show one chip per tool that started
+      const started = [];
+      const failed = new Set(toolTrace.filter(e => e.phase === 'failed').map(e => e.tool));
+      toolTrace.filter(e => e.phase === 'started').forEach(e => {
+        if (!started.some(s => s.tool === e.tool && JSON.stringify(s.args) === JSON.stringify(e.args))) started.push(e);
+      });
+      const bar = document.createElement('div');
+      bar.className = 'tool-trace';
+      started.forEach(e => {
+        const chip = document.createElement('span');
+        const isFailed = failed.has(e.tool) && started.filter(x => x.tool === e.tool).length === failed.size;
+        chip.className = `tool-chip ${isFailed ? 'failed' : ''}`;
+        const argHint = e.args ? (e.args.service_name || e.args.query || e.args.action || '').toString().slice(0, 24) : '';
+        chip.innerHTML = `🔧 ${e.tool}${argHint ? `: <em>${argHint}</em>` : ''}`;
+        bar.appendChild(chip);
+      });
+      bubble.appendChild(bar);
+    }
+
     // ── Format agent text (markdown-lite) ────────────────────────────────────
     function formatAgentText(text) {
       return text
         // Status badges
         .replace(/✅\s*RESOLVED/g, '<span class="badge-resolved">✅ RESOLVED</span>')
         .replace(/🎫\s*TICKET CREATED/g, '<span class="badge-ticket">🎫 TICKET CREATED</span>')
-        .replace(/⏳\s*IN PROGRESS/g, '<span class="badge-progress">⏳ IN PROGRESS</span>')
+        .replace(/⏳\s*(IN PROGRESS|AWAITING APPROVAL)/g, '<span class="badge-progress">⏳ $1</span>')
         .replace(/🚨\s*ESCALATED/g, '<span class="badge-escalated">🚨 ESCALATED</span>')
+        // Escape raw HTML from the model before other substitutions
+        .replace(/<(?!\/?span|\/?em|\/?div|\/?strong|\/?br)[^>]*>/g, '&lt;')
         // Bold
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         // Numbered lists

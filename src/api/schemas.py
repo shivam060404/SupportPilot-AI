@@ -29,6 +29,29 @@ class ChatRequest(BaseModel):
         ),
         examples=["550e8400-e29b-41d4-a716-446655440000"],
     )
+    category: Optional[str] = Field(
+        default=None,
+        description="Optional category hint from the UI (VPN, Password, WiFi, ...). Used as a routing hint only.",
+        examples=["VPN"],
+    )
+
+
+class ToolTraceItem(BaseModel):
+    """One tool invocation observed during the agent run (spec §14)."""
+    tool: str
+    phase: str
+    args: Optional[dict] = None
+    duration_ms: Optional[float] = None
+    ok: Optional[bool] = None
+    error: Optional[str] = None
+
+
+class SourceItem(BaseModel):
+    """A retrieved knowledge-base source cited for grounding."""
+    title: str
+    category: Optional[str] = None
+    file: Optional[str] = None
+    score: Optional[float] = None
 
 
 class ChatResponse(BaseModel):
@@ -37,6 +60,14 @@ class ChatResponse(BaseModel):
     response: str = Field(description="Agent's answer / troubleshooting steps.")
     trace_id: str = Field(description="Correlation ID for this request (for logs).")
     phase: str = Field(default="Phase 6", description="Current system phase.")
+    tool_trace: list[ToolTraceItem] = Field(
+        default_factory=list,
+        description="Ordered log of tools the agent invoked while producing this reply.",
+    )
+    sources: list[SourceItem] = Field(
+        default_factory=list,
+        description="Knowledge-base chunks used to ground the answer.",
+    )
 
 
 # ── /health ───────────────────────────────────────────────────────────────────
@@ -77,9 +108,39 @@ class ServiceStatusItem(BaseModel):
     service: str
     status: str
     message: str
-    
+
 class ServicesStatusResponse(BaseModel):
     services: list[ServiceStatusItem]
+
+# ── /approvals ───────────────────────────────────────────────────────────────
+
+class ApprovalItem(BaseModel):
+    id: str
+    session_id: str
+    action: str
+    target: str
+    rationale: Optional[str] = None
+    status: str
+    requested_at: Optional[str] = None
+    decided_at: Optional[str] = None
+    executed_at: Optional[str] = None
+
+
+class ApprovalListResponse(BaseModel):
+    approvals: list[ApprovalItem]
+
+
+class ApprovalDecisionRequest(BaseModel):
+    decision: str = Field(..., pattern="^(APPROVED|REJECTED)$", description="Human decision.")
+
+
+# ── Tickets (write/list) ─────────────────────────────────────────────────────
+
+class TicketCreateRequest(BaseModel):
+    summary: str = Field(..., min_length=3, max_length=2000)
+    category: str = Field(..., min_length=1, max_length=64)
+    priority: str = Field(default="MEDIUM", pattern="^(LOW|MEDIUM|HIGH|CRITICAL)$")
+
 
 # ── Error ────────────────────────────────────────────────────────────────────
 

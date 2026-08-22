@@ -1,30 +1,24 @@
 """
 src/agents/supervisor_agent.py
 ────────────────────────────────
-Phase 1 — Single MAF agent backed by Groq LLaMA via the OpenAI-compatible
-endpoint.
+Multi-agent IT support orchestration built on MAF WorkflowBuilder.
 
 Architecture
 ────────────
-  OpenAIChatClient(base_url=groq)
-       ↓
-  create_harness_agent(...)   ← MAF batteries-included agent
-       ↓
-  agent.run(messages, session=session)
-       ↓
-  AgentResponse.text
+                    ┌─ condition: escalation keywords ─▶ Tier-2 Escalation Agent
+User ▶ TriageExecutor                                  │   tools: MCP AD lookups +
+                    └─ condition: everything else ───▶ │            approval gate
+                                                       ▼ Tier-1 Support Agent
+                                                         tools: RAG search, service
+                                                         status, ticket CRUD
 
-Session management
-──────────────────
-Each user conversation is keyed by a session_id. We use MAF's built-in
-InMemoryHistoryProvider so the agent automatically maintains multi-turn
-context per session.  Phase 3 will swap this for a persistent store.
+Routing is a deterministic keyword pre-filter (fast, testable); the Tier-1
+agent's system prompt performs the real per-issue classification. Sensitive
+actions are gated by the DB-backed human approval flow in
+src/tools/approval.py — enforcement lives outside the LLM.
 
-Usage (internal)
-──────────────────
-    from src.agents.supervisor_agent import SupportAgent
-    agent = SupportAgent()          # singleton-friendly
-    response = await agent.chat("My VPN is broken", session_id="user-123")
+Sessions are persisted to SQLite via SQLiteHistoryProvider, so conversations
+survive restarts.
 """
 from __future__ import annotations
 
@@ -37,47 +31,80 @@ from agent_framework_openai import OpenAIChatClient
 from config import get_settings
 from src.agents.prompts import SYSTEM_PROMPT
 from src.observability.logger import get_logger
+from src.observability.request_context import set_request_context
 from src.persistence.database import init_db
 from src.tools.search_knowledge_base import search_knowledge_base
 from src.tools.check_service_status import check_service_status
 from src.tools.create_ticket import create_ticket
 from src.tools.get_ticket_status import get_ticket_status
+from src.tools.approval import request_approval, execute_approved_action
 from src.agents.sqlite_history_provider import SQLiteHistoryProvider
 from src.agents.escalation_agent import create_escalation_agent
-from agent_framework import Executor, WorkflowBuilder, WorkflowContext, handler, Message, AgentSession
 
 log = get_logger(__name__)
 
-# Initialize DB tables
-init_db()
+# Keywords whose presence in the latest user message routes to Tier 2.
+# Deliberately narrow: bare "account"/"password" stay with Tier 1 (KB covers
+# resets); lockouts, unlocks, managerial and AD matters escalate.
+ESCALATION_KEYWORDS = (
+    "locked",
+    "lock out",
+    "lockout",
+    "unlock",
+    "manager",
+    "escalate",
+    "escalation",
+    "active directory",
+    "ad account",
+    "admin rights",
+    "administrator access",
+    "permissions request",
+)
 
-class TriageExecutor(Executor):
-    @handler
-    async def process(self, messages: list[Message], ctx: WorkflowContext) -> None:
-        # Just pass the messages forward to be evaluated by the edge conditions
-        await ctx.yield_output(messages)
 
-def is_escalation_query(messages: list[Message]) -> bool:
+def is_escalation_query(messages: list) -> bool:
+    """Deterministic pre-triage: does the latest message need Tier 2?"""
     if not messages:
         return False
-    # Check the last user message text
     try:
         content = messages[-1].text.lower()
     except Exception:
         content = str(messages[-1]).lower()
-    return any(kw in content for kw in ["account", "password", "locked", "escalate", "manager", "ad", "unlock"])
+    return any(kw in content for kw in ESCALATION_KEYWORDS)
 
-def is_tier1_query(messages: list[Message]) -> bool:
+
+def is_tier1_query(messages: list) -> bool:
     return not is_escalation_query(messages)
+
+
+class TriageExecutor(af.Executor):
+    @af.handler
+    async def process(self, messages: list[af.Message], ctx: af.WorkflowContext) -> None:
+        await ctx.yield_output(messages)
+
 
 class SupportAgent:
     """
-    Orchestrates the Tier 1 IT Support and Tier 2 Escalation Agents via MAF WorkflowBuilder.
-    State is persisted to SQLite via SQLiteHistoryProvider.
+    Orchestrates the Tier 1 IT Support and Tier 2 Escalation Agents via a MAF
+    workflow. State is persisted to SQLite via SQLiteHistoryProvider.
     """
 
     def __init__(self) -> None:
         settings = get_settings()
+
+        # Ensure schema exists (moved out of module import time).
+        init_db()
+
+        self.llm_ready = bool(settings.groq_api_key)
+        self._client = None
+        self.workflow_agent = None
+        self._history_provider = SQLiteHistoryProvider()
+
+        if not self.llm_ready:
+            # Degrade gracefully: REST endpoints (tickets/approvals/services/
+            # sessions) keep working; chat returns a clear configuration error.
+            log.error("support_agent_init_no_api_key")
+            return
 
         self._client = OpenAIChatClient(
             model=settings.groq_model,
@@ -85,14 +112,11 @@ class SupportAgent:
             base_url=settings.groq_base_url,
         )
 
-        self._history_provider = SQLiteHistoryProvider()
-        
-        # ── Phase 2 Tools for IT Agent ──
         it_tools = [
             search_knowledge_base,
             check_service_status,
             create_ticket,
-            get_ticket_status
+            get_ticket_status,
         ]
 
         log.info(
@@ -101,7 +125,6 @@ class SupportAgent:
             base_url=settings.groq_base_url,
         )
 
-        # ── Build Agents ──
         it_agent = af.create_harness_agent(
             client=self._client,
             id="supportpilot-it",
@@ -111,32 +134,24 @@ class SupportAgent:
             tools=it_tools,
             loop_max_iterations=10,
         )
-        
+
         escalation_agent = create_escalation_agent(
             client=self._client,
             history_provider=self._history_provider,
         )
-        
+
         triage = TriageExecutor(id="triage")
 
-        # ── Build Workflow ──
         workflow = (
-            WorkflowBuilder(start_executor=triage)
+            af.WorkflowBuilder(start_executor=triage)
             .add_edge(triage, escalation_agent, condition=is_escalation_query)
             .add_edge(triage, it_agent, condition=is_tier1_query)
             .build()
         )
-        
-        # Convert workflow to an agent interface so we can call .run()
+
         self.workflow_agent = workflow.as_agent(name="SupportPilot")
 
-    def _get_or_create_session(
-        self, session_id: str
-    ) -> tuple[af.Agent, af.AgentSession]:
-        """
-        Return the workflow agent and a session for the given session_id.
-        History is automatically retrieved and saved to SQLite.
-        """
+    def _get_or_create_session(self, session_id: str) -> tuple[af.Agent, af.AgentSession]:
         session = af.AgentSession(session_id=session_id)
         return self.workflow_agent, session
 
@@ -144,26 +159,26 @@ class SupportAgent:
         self,
         message: str,
         session_id: Optional[str] = None,
+        trace_id: Optional[str] = None,
     ) -> dict:
         """
-        Send a user message to the MAF agent and return a structured result.
+        Send a user message to the MAF workflow and return a structured result.
 
-        Parameters
-        ----------
-        message:    The user's raw input string.
-        session_id: Conversation identifier. Auto-generated if None.
-
-        Returns
-        -------
-        dict with keys:
-            session_id  — the session used
-            response    — agent's text reply
-            trace_id    — correlation ID for this invocation
+        Returns dict with keys: session_id, response, trace_id.
         """
         if not session_id:
             session_id = str(uuid.uuid4())
+        trace_id = trace_id or str(uuid.uuid4())
 
-        trace_id = str(uuid.uuid4())
+        # Deterministic code (tools/guards) reads identity from here —
+        # never from LLM-supplied values.
+        set_request_context(session_id=session_id, trace_id=trace_id)
+
+        if not self.llm_ready or self.workflow_agent is None:
+            raise RuntimeError(
+                "GROQ_API_KEY is not configured. Set it in .env and restart the server."
+            )
+
         log.info(
             "chat_request",
             session_id=session_id,
@@ -174,7 +189,7 @@ class SupportAgent:
         agent, session = self._get_or_create_session(session_id)
 
         try:
-            response: af.AgentResponse = await agent.run(  # type: ignore[assignment]
+            response: af.AgentResponse = await agent.run(
                 messages=message,
                 session=session,
             )

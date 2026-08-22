@@ -33,7 +33,9 @@ from src.api.routes.chat import router as chat_router
 from src.api.routes.tickets import router as tickets_router
 from src.api.routes.sessions import router as sessions_router
 from src.api.routes.services import router as services_router
+from src.api.routes.approvals import router as approvals_router
 from src.observability.logger import configure_logging, get_logger
+from src.persistence.database import init_db
 
 log = get_logger(__name__)
 settings = get_settings()
@@ -54,7 +56,21 @@ async def lifespan(app: FastAPI):
         phase="Phase 6",
     )
 
-    # Initialise the MAF agent once and share across requests
+    # Ensure DB schema exists, then initialise the MAF agent once and share it
+    init_db()
+
+    # Ensure the knowledge base exists so RAG works out of the box
+    # (fresh deploys / Docker volumes start empty).
+    try:
+        from src.rag.retriever import KnowledgeRetriever
+        if not KnowledgeRetriever().available:
+            from src.rag.ingestor import ingest_knowledge_base
+            log.info("kb_auto_ingest_start")
+            ingest_knowledge_base()
+    except Exception as exc:
+        # Non-fatal: agent still answers without grounded retrieval.
+        log.error("kb_auto_ingest_failed", error=str(exc))
+
     from src.agents.supervisor_agent import SupportAgent
     app.state.agent = SupportAgent()
 
@@ -94,6 +110,7 @@ app.include_router(chat_router, prefix="/api/v1")
 app.include_router(tickets_router, prefix="/api/v1")
 app.include_router(sessions_router, prefix="/api/v1")
 app.include_router(services_router, prefix="/api/v1")
+app.include_router(approvals_router, prefix="/api/v1")
 
 # ── Static files (web UI) ─────────────────────────────────────────────────────
 if STATIC_DIR.exists():
