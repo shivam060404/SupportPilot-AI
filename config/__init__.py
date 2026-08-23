@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     # ── LLM (Groq — OpenAI-compatible endpoint) ───────────────────────────────
     groq_api_key: str = Field(default="")
-    groq_model: str = Field(default="llama-3.3-70b-versatile")
+    groq_model: str = Field(default="openai/gpt-oss-120b")
     groq_base_url: str = Field(default="https://api.groq.com/openai/v1")
 
     # ── Database ─────────────────────────────────────────────────────────────

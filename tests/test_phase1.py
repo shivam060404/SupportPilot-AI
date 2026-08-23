@@ -27,7 +27,6 @@ def test_settings_defaults():
     s = Settings(groq_api_key="dummy")
     assert s.app_name == "SupportPilot AI"
     assert s.api_port == 8000
-    assert "llama" in s.groq_model.lower()
     assert "groq.com" in s.groq_base_url
 
 

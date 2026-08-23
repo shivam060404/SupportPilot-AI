@@ -25,30 +25,26 @@ os.environ.setdefault("GROQ_API_KEY", "test-key-not-real")
 def setup_db():
     init_db()
 
-def test_sqlite_history_provider():
+@pytest.mark.asyncio
+async def test_sqlite_history_provider():
     """Verify that SQLiteHistoryProvider correctly serializes and deserializes MAF messages."""
     provider = SQLiteHistoryProvider()
-    session_id = "test-session-123"
-    
-    # We create a dummy UserMessage and AssistantMessage (which don't require an actual LLM run to instantiate)
-    # However, MAF's base Message types may require some specific kwargs.
-    # The simplest way is to manually construct dicts that resemble serialized messages and let MAF parse them.
-    # Assuming af.Message.from_json() works properly on compliant JSON strings.
-    
+    session_id = f"test-session-{__import__('uuid').uuid4()}"
+
     try:
         msg1 = af.UserMessage(content="Hello", source="user")
         msg2 = af.AssistantMessage(content="Hi there", source="assistant")
         messages = [msg1, msg2]
-        provider.save_messages(session_id, messages)
-        
-        retrieved = provider.get_messages(session_id)
+        await provider.save_messages(session_id, messages)
+
+        retrieved = await provider.get_messages(session_id)
         assert len(retrieved) == 2
-        assert retrieved[0].content == "Hello"
-        assert retrieved[1].content == "Hi there"
+        assert retrieved[0].text == "Hello"
+        assert retrieved[1].text == "Hi there"
     except Exception as e:
-        # If instantiation of these specific classes fails due to MAF version diffs, 
+        # If instantiation of these specific classes fails due to MAF version diffs,
         # at least ensure provider doesn't crash on empty/invalid
-        assert len(provider.get_messages("non-existent")) == 0
+        assert len(await provider.get_messages("non-existent")) == 0
 
 @pytest.mark.asyncio
 async def test_tickets_api():

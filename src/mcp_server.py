@@ -7,6 +7,15 @@ capabilities. Built using the official `mcp` Python SDK.
 Business logic lives in src/services/ad_directory.py so the guarded,
 approval-checked execution path and this MCP server stay in sync.
 """
+import sys
+from pathlib import Path
+
+# Make project-root imports work regardless of the parent's environment
+# (MCP stdio clients spawn this process with a minimal environment).
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
 from mcp.server.fastmcp import FastMCP
 
 from src.services.ad_directory import check_account_status, get_manager_info, unlock_account

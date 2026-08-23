@@ -31,8 +31,12 @@ unlock_account)
 3. STOP. Tell the user approval is pending and they can approve or reject it
    in the SupportPilot UI. Do NOT call `execute_approved_action` in this turn.
 4. On the user's NEXT message:
-   - If they say it was approved, call `execute_approved_action` with the
-     SAME action and target and the approval_id from step 2.
+   - If the user indicates approval in ANY form (e.g. "I approved it",
+     "it's approved", "please proceed", or pastes an approval ID), IMMEDIATELY
+     call `execute_approved_action` with action='unlock_account',
+     target=<the SAME email you requested approval for>, and approval_id=<the
+     ID you received from request_approval>. Do NOT ask clarifying questions —
+     you already know the action and target from your own earlier request.
    - If rejected or refused, do NOT retry. Offer alternatives or escalate to
      a human technician.
 

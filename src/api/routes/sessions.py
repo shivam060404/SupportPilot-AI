@@ -22,24 +22,25 @@ async def get_session_history(session_id: str) -> SessionHistoryResponse:
     for raw in raw_messages:
         try:
             msg = json.loads(raw)
-            # Depending on MAF version and serialization, we extract role and content
-            # The 'type' field is usually 'UserMessage', 'AssistantMessage' etc.
-            # or the model contains 'role' and 'content'
-            
-            # Simple heuristic extraction:
-            role = "unknown"
-            if "type" in msg:
-                if "UserMessage" in msg["type"]:
+            # Prefer the standard "role" field; fall back to MAF type names.
+            role = msg.get("role", "").lower()
+            if not role or role == "unknown":
+                mtype = msg.get("type", "")
+                if "user" in mtype.lower():
                     role = "user"
-                elif "Assistant" in msg["type"] or "Agent" in msg["type"]:
+                elif "assistant" in mtype.lower() or "agent" in mtype.lower():
                     role = "assistant"
-            
-            content = msg.get("content", "")
-            # Handle complex content if it's a list
+                else:
+                    role = "unknown"
+
+            content = msg.get("contents", msg.get("content", ""))
+            # Handle complex content if it's a list of content parts
             if isinstance(content, list):
                 text_parts = [p.get("text", "") for p in content if isinstance(p, dict) and "text" in p]
                 content = " ".join(text_parts)
-                
+            elif isinstance(content, dict):
+                content = content.get("text", "")
+
             parsed_messages.append(MessageHistoryItem(role=role, content=str(content)))
         except Exception:
             continue

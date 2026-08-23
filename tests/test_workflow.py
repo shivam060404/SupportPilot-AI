@@ -87,3 +87,23 @@ def test_escalation_routing(text):
 def test_tier1_routing(text):
     assert is_escalation_query([_M(text)]) is False
     assert is_tier1_query([_M(text)]) is True
+
+
+def test_sticky_routing_on_open_approval(monkeypatch):
+    """An unresolved approval keeps follow-ups in Tier 2 even without keywords."""
+    from src.persistence.database import init_db
+    from src.persistence.repositories import ApprovalRepository
+    from src.observability.request_context import set_request_context, clear_request_context
+    init_db()
+    sid = "sticky-routing-session"
+    req = ApprovalRepository.request_approval(session_id=sid, action="unlock_account", target="a@b.com")
+
+    set_request_context(session_id=sid)
+    try:
+        assert is_escalation_query([_M("it is approved now, please go ahead")]) is True
+        # Resolve it -> sticky signal disappears
+        ApprovalRepository.decide(req.id, "APPROVED")
+        ApprovalRepository.mark_executed(req.id)
+        assert is_escalation_query([_M("thanks, anything else?")]) is False
+    finally:
+        clear_request_context()
