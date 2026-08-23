@@ -1,6 +1,6 @@
 # SupportPilot AI
 
-> **AI-powered IT Support Agent** built with **Microsoft Agent Framework (MAF) 1.14.0**, Groq LLaMA, FastAPI, RAG, MCP, and a code-enforced human-approval gate.
+> **AI-powered IT Support Agent** built with **Microsoft Agent Framework (MAF) 1.14.0**, Groq (`openai/gpt-oss-120b`), FastAPI, RAG, MCP, and a code-enforced human-approval gate.
 
 ```
 Browser Chat UI (approvals panel, tool/source rendering)
@@ -12,9 +12,9 @@ Microsoft Agent Framework WorkflowBuilder (deterministic routing)
 Tier-1 IT Agent                  Tier-2 Escalation Agent
 RAG · service status · tickets   MCP AD lookups + approval-gate tools
       ↘                              ↙
-          Groq LLaMA 3.3-70B (OpenAI-compatible endpoint)
+        Groq openai/gpt-oss-120b (OpenAI-compatible chat-completions endpoint)
                      ↓
-     SQLite (tickets · audit log · sessions · approvals)
+     SQLite (tickets · audit log · transcripts · approvals)
      ChromaDB (knowledge-base vectors)
 ```
 
@@ -27,6 +27,10 @@ Sensitive actions (e.g. `unlock_account`) are **never** reachable by the LLM dir
 3. Only `execute_approved_action` can run the capability — it independently verifies a matching `APPROVED` record in the database before touching the business service. Mismatched targets, replays (`ALREADY_EXECUTED`), rejections and unapproved attempts are all blocked and audit-logged.
 
 The sensitive capability is deliberately **not** exposed on the MCP server; enforcement lives outside the LLM.
+
+### Sticky escalation routing
+
+Routing is deterministic keyword pre-triage **plus** a sticky rule: while a session has an unresolved approval request (`PENDING` or `APPROVED`-not-yet-executed), all follow-up messages stay with the Tier-2 agent — so natural phrasing like *"it's approved, go ahead"* correctly triggers the guarded execution instead of falling back to Tier 1.
 
 ---
 
@@ -67,9 +71,30 @@ python -m src.rag.ingestor
 
 ### 5. Open the chat UI
 
-Visit **http://localhost:8000**. Conversations survive page reloads (session restore) and server restarts (SQLite-backed history).
+Visit **http://localhost:8000**. Conversations survive page reloads (session restore via the history API) and every turn is durably transcripted to SQLite.
 
-**Try the approval flow:** ask *"My AD account is locked, please unlock it"* → the Tier-2 agent investigates via MCP, files an approval request, and pauses. A red bell appears in the header — approve it, then tell the agent to continue.
+**Try the approval flow:** ask *"My AD account is locked, please unlock it"* → the Tier-2 agent investigates via MCP, files an approval request, and pauses. A red bell appears in the header — approve it, then say *"it's approved, go ahead"*. The agent verifies the approval and executes.
+
+> **Model note:** `GROQ_MODEL` defaults to `openai/gpt-oss-120b`. The older `llama-3.3-70b-versatile` ID has been retired from Groq's catalog; any current chat model with tool-calling support works.
+
+---
+
+## Live-verified behaviour (real Groq calls)
+
+| Scenario | Verified result |
+|----------|-----------------|
+| Tier-1 VPN issue | Calls `search_knowledge_base`, cites *VPN Troubleshooting Guide* with relevance scores |
+| Multi-turn follow-up | Remembers prior turns from SQLite-backed transcript + session state |
+| Ticket creation | Returns a real ticket ID, retrievable via `GET /tickets/{id}` |
+| Service status | Reads the allow-listed registry (Salesforce → Outage), never invents status |
+| Account lockout | Routed to Tier-2, verified via MCP, files `request_approval`, stops and waits |
+| Human approves in UI/REST | Sticky routing keeps Tier-2; `execute_approved_action` validates and executes |
+| Unapproved execution attempt | Blocked (`DENIED` / `ALREADY_EXECUTED`) and written to the audit log |
+
+## Known limitations
+
+- Latency ranges ~2–60s per reply depending on tool-loop depth.
+- Agent *context* across server restarts is best-effort (framework-managed); transcripts are always durable in SQLite. Full restart-resilient context would use MAF workflow checkpointing.
 
 ---
 
@@ -130,7 +155,7 @@ source .venv/bin/activate
 PYTHONPATH=. pytest tests/ -v
 ```
 
-Covers: config/API contracts, DB + repositories, RAG behaviour (mocked), deterministic routing conditions, guardrails/allow-lists, history idempotency, and the full approval lifecycle including REST decisions and replay protection.
+Covers: config/API contracts, DB + repositories, RAG behaviour (mocked), deterministic + sticky routing conditions, guardrails/allow-lists, history idempotency, and the full approval lifecycle including REST decisions and replay protection. (48 tests)
 
 ---
 
@@ -179,14 +204,24 @@ SupportPilot AI/
 
 | Component | Technology |
 |-----------|-----------|
-| Agent Framework | Microsoft Agent Framework 1.14.0 |
-| LLM | Groq LLaMA 3.3-70B (OpenAI-compatible endpoint) |
+| Agent Framework | Microsoft Agent Framework 1.14.0 (WorkflowBuilder, harness agents, MCP tool) |
+| LLM | Groq `openai/gpt-oss-120b` via OpenAI-compatible **chat-completions** endpoint |
 | API | FastAPI + uvicorn |
 | Persistence | SQLAlchemy 2 + SQLite (PostgreSQL-ready) |
 | RAG | ChromaDB + sentence-transformers MiniLM |
-| MCP | official `mcp` SDK (stdio server) |
+| MCP | official `mcp<2` SDK (stdio server) |
 | Settings / Logging | pydantic-settings / structlog |
 | Testing | pytest + pytest-asyncio + httpx |
+
+### MAF/Groq compatibility notes
+
+These integration quirks are handled in code — keep them in mind when upgrading:
+
+- Use `OpenAIChatCompletionClient` (**not** `OpenAIChatClient`) — Groq has no Responses API.
+- Harness flags required for Groq: `disable_web_search=True`, `disable_todo=True`, `disable_mode=True`.
+- Custom `HistoryProvider` methods must be `async def` (MAF awaits them).
+- Workflow routers must use `ctx.send_message(...)`; `ctx.yield_output()` ends the run.
+- The MCP stdio server is spawned with `sys.executable` and self-registers the project root on `sys.path`.
 
 ---
 
