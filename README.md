@@ -169,40 +169,86 @@ Covers: config/API contracts, DB + repositories, RAG behaviour (mocked), determi
 ## Project Structure
 
 ```
-SupportPilot AI/
-├── config/__init__.py             # Pydantic settings (all config here)
-├── knowledge_base/*.md            # Approved IT articles (frontmatter metadata)
-├── static/index.html|styles.css   # Chat UI + approvals panel
+SupportPilot-AI/
+├── config/
+│   ├── __init__.py                    # Settings (Pydantic models)
+│   └── settings.py                    # Re-export
+│
+├── core/                              # Central business logic & safeguards
+│   ├── audit/                         # Structured audit logging
+│   │   └── audit_logger.py
+│   ├── guardrails/                    # Input + Output guardrails pipeline
+│   │   ├── base.py                    # Abstract GuardrailBase class
+│   │   ├── pipeline.py                # GuardrailPipeline orchestrator
+│   │   ├── input/                     # Pre-execution validation
+│   │   │   ├── contextual_compliance.py
+│   │   │   ├── input_validation.py    # Schema, length, character sanity
+│   │   │   ├── pii_detector.py        # SSN, email, phone, CC detection
+│   │   │   ├── prompt_injection.py    # Injection & jailbreak detection
+│   │   │   └── prompt_safety.py       # Toxicity & safety classifier
+│   │   └── output/                    # Post-execution validation
+│   │       ├── content_moderation.py  # Harmful output filter
+│   │       ├── hallucination_check.py # Grounding & consistency check
+│   │       ├── output_validation.py   # Schema & format verification
+│   │       └── pii_leakage.py         # Outbound PII sanitization
+│   ├── middleware/                    # Security & observability middleware
+│   │   ├── auth.py                    # API key validation
+│   │   ├── logging_middleware.py      # Request lifecycle & trace-ID logging
+│   │   ├── pii_redaction.py           # Log sanitization
+│   │   ├── rate_limiter.py            # Token-bucket rate limiting
+│   │   └── secrets_filter.py          # API key & token masking in logs
+│   ├── orchestration/                 # Multi-agent coordination layer
+│   │   ├── router.py                  # Triage executor & sticky approval routing
+│   │   ├── agents/                    # Specialized MAF agents
+│   │   │   ├── tier1_agent.py         # Tier-1 IT Support agent
+│   │   │   └── tier2_agent.py         # Tier-2 Escalation & approval agent
+│   │   ├── prompts/                   # Isolated system prompts
+│   │   │   ├── tier1_prompt.py
+│   │   │   └── tier2_prompt.py
+│   │   └── providers/                 # LLM & state providers
+│   │       ├── groq_client.py         # Groq OpenAI-compatible client factory
+│   │       └── history_provider.py    # Async SQLite conversation history
+│   └── privacy/                       # PII redaction engine
+│       ├── pii_patterns.py            # Regex patterns for sensitive data
+│       ├── redactor.py                # Redaction & masking engine
+│       └── retention.py               # Data lifecycle & retention
+│
+├── knowledge_base/                    # Curated IT articles (*.md with frontmatter)
+├── static/                            # Web UI (index.html, styles.css)
+│
 ├── src/
-│   ├── agents/
-│   │   ├── supervisor_agent.py    # MAF workflow: triage → Tier-1 / Tier-2
-│   │   ├── escalation_agent.py    # Tier-2: MCP lookups + approval-gate tools
-│   │   ├── prompts.py             # Tier-1 system prompt
-│   │   ├── prompts_approval.py    # Tier-2 system prompt (approval protocol)
-│   │   └── sqlite_history_provider.py
-│   ├── api/
-│   │   ├── main.py                # FastAPI entry point (lifespan init)
-│   │   ├── schemas.py             # All request/response models
-│   │   ├── middleware.py          # Trace-ID + request logging
-│   │   └── routes/                # chat · tickets · sessions · services · approvals
-│   ├── observability/
-│   │   ├── logger.py              # structlog configuration
-│   │   ├── request_context.py     # session/trace contextvars
-│   │   └── tooltrace.py           # per-request tool-call trace collector
-│   ├── persistence/
-│   │   ├── models.py              # Ticket · AuditLog · SessionMessage · ApprovalRequest
-│   │   ├── repositories.py        # CRUD + validation + audit wiring
-│   │   └── database.py
-│   ├── rag/
-│   │   ├── ingestor.py            # markdown → chunks → embeddings
-│   │   └── retriever.py           # scored retrieval (+ category filter)
-│   ├── services/ad_directory.py   # mock AD business logic (shared)
-│   ├── tools/
-│   │   ├── search_knowledge_base.py · check_service_status.py
-│   │   ├── create_ticket.py · get_ticket_status.py
-│   │   └── approval.py            # request_approval · execute_approved_action
-│   └── mcp_server.py              # stdio MCP server (read-only AD lookups)
-└── tests/                         # phase + approvals + guardrails suites
+│   ├── api/                           # FastAPI application layer
+│   │   ├── main.py                    # Entry point & lifespan management
+│   │   ├── schemas.py                 # Pydantic request/response schemas
+│   │   └── routes/                    # chat · tickets · sessions · services · approvals
+│   ├── observability/                 # Tracing & telemetry
+│   │   ├── logger.py                  # structlog configuration
+│   │   ├── metrics.py                 # Prometheus latency & error metrics
+│   │   ├── request_context.py         # Session & trace contextvars
+│   │   ├── sampling.py                # Trace sampling policies
+│   │   ├── tooltrace.py               # Tool execution performance collector
+│   │   └── tracing.py                 # OpenTelemetry distributed tracing
+│   ├── persistence/                   # Data layer
+│   │   ├── database.py                # SQLAlchemy engine & session factory
+│   │   ├── models.py                  # Ticket · AuditLog · SessionMessage · ApprovalRequest
+│   │   └── repositories.py            # Repository pattern CRUD & dedup
+│   ├── rag/                           # Production RAG pipeline
+│   │   ├── chunker.py                 # Semantic chunking with overlap
+│   │   ├── embedder.py                # MiniLM embedding pipeline
+│   │   ├── ingestor.py                # Markdown vector ingestor
+│   │   ├── reranker.py                # Cross-encoder similarity reranking
+│   │   └── retriever.py               # Scored hybrid retrieval (+ category filter)
+│   ├── services/                      # Business integrations
+│   │   └── ad_directory.py            # Active Directory simulation
+│   ├── tools/                         # Deterministic agent tools
+│   │   ├── approval.py                # request_approval · execute_approved_action
+│   │   ├── check_service_status.py    # Allow-listed service health checks
+│   │   ├── create_ticket.py           # Validated IT ticketing
+│   │   ├── get_ticket_status.py       # Ticket state queries
+│   │   └── search_knowledge_base.py   # Grounded RAG retrieval tool
+│   └── mcp_server.py                  # FastMCP stdio server (read-only AD tools)
+│
+└── tests/                             # Full test suite (56 unit & integration tests)
 ```
 
 ---
