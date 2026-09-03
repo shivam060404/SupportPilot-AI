@@ -19,7 +19,7 @@ import sys
 import agent_framework as af
 from agent_framework_openai import OpenAIChatCompletionClient
 
-from src.agents.prompts_approval import ESCALATION_SYSTEM_PROMPT
+from core.orchestration.prompts.tier2_prompt import ESCALATION_SYSTEM_PROMPT
 from src.observability.logger import get_logger
 from src.tools.approval import request_approval, execute_approved_action
 

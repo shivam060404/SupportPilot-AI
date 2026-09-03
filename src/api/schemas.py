@@ -68,6 +68,10 @@ class ChatResponse(BaseModel):
         default_factory=list,
         description="Knowledge-base chunks used to ground the answer.",
     )
+    blocked: bool = Field(default=False, description="Whether the request was blocked by input guardrails.")
+    block_reason: Optional[str] = Field(default=None, description="Reason for blocking, if blocked.")
+    pii_detected: bool = Field(default=False, description="Whether PII was detected and redacted in the input.")
+    grounding: Optional[dict] = Field(default=None, description="Metadata from the hallucination check.")
 
 
 # ── /health ───────────────────────────────────────────────────────────────────

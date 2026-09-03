@@ -71,7 +71,7 @@ async def lifespan(app: FastAPI):
         # Non-fatal: agent still answers without grounded retrieval.
         log.error("kb_auto_ingest_failed", error=str(exc))
 
-    from src.agents.supervisor_agent import SupportAgent
+    from core.orchestration.agents.tier1_agent import SupportAgent
     app.state.agent = SupportAgent()
 
     yield
@@ -93,10 +93,14 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
-from src.api.middleware import LoggingMiddleware
+from core.middleware.logging_middleware import EnhancedLoggingMiddleware
+from core.middleware.rate_limiter import RateLimiterMiddleware
+from core.middleware.auth import APIKeyAuthMiddleware
 
 # ── CORS & Middleware ─────────────────────────────────────────────────────────
-app.add_middleware(LoggingMiddleware)
+app.add_middleware(EnhancedLoggingMiddleware)
+app.add_middleware(RateLimiterMiddleware)
+app.add_middleware(APIKeyAuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -127,3 +131,13 @@ async def root(request: Request) -> HTMLResponse:
     return HTMLResponse(
         content="<h1>SupportPilot AI</h1><p>UI not found. Run from project root.</p>"
     )
+
+
+# ── Metrics ───────────────────────────────────────────────────────────────────
+from src.observability.metrics import get_metrics_text
+from fastapi.responses import PlainTextResponse
+
+@app.get("/metrics", response_class=PlainTextResponse, include_in_schema=False)
+async def metrics():
+    """Prometheus metrics endpoint."""
+    return get_metrics_text()

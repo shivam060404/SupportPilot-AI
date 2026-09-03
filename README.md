@@ -11,6 +11,8 @@ Microsoft Agent Framework WorkflowBuilder (deterministic routing)
       ↙                              ↘
 Tier-1 IT Agent                  Tier-2 Escalation Agent
 RAG · service status · tickets   MCP AD lookups + approval-gate tools
+      │                               │
+      └─────── Input Guardrails ──────┘ (PII redaction, prompt injection)
       ↘                              ↙
         Groq openai/gpt-oss-120b (OpenAI-compatible chat-completions endpoint)
                      ↓
@@ -60,7 +62,12 @@ Without a key the server still boots — chat returns a clear configuration erro
 ### 4. Run
 
 ```bash
-PYTHONPATH=. uvicorn src.api.main:app --reload --port 8000
+# Using the virtual environment directly:
+.venv/bin/python -m uvicorn src.api.main:app --reload --port 8000
+
+# Or after activating .venv:
+source .venv/bin/activate
+uvicorn src.api.main:app --reload --port 8000
 ```
 
 On startup the app auto-ingests `knowledge_base/` into ChromaDB if the vector store is empty. To force a re-index after editing articles:

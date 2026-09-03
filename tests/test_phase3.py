@@ -17,7 +17,7 @@ import agent_framework as af
 from src.api.main import app
 from src.persistence.database import init_db
 from src.persistence.repositories import SessionRepository
-from src.agents.sqlite_history_provider import SQLiteHistoryProvider
+from core.orchestration.providers.history_provider import SQLiteHistoryProvider
 
 os.environ.setdefault("GROQ_API_KEY", "test-key-not-real")
 

@@ -12,18 +12,15 @@ import pytest
 import pytest_asyncio
 import agent_framework as af
 
-from src.agents.supervisor_agent import (
-    SupportAgent,
-    is_escalation_query,
-    is_tier1_query,
-)
+from core.orchestration.agents.tier1_agent import SupportAgent
+from core.orchestration.router import is_escalation_query, is_tier1_query
 
 os.environ.setdefault("GROQ_API_KEY", "test-key-not-real")
 
 @pytest.mark.asyncio
 async def test_workflow_routing_escalation():
     # We will just verify the TriageExecutor edge conditions.
-    from src.agents.supervisor_agent import is_escalation_query, is_tier1_query
+    from core.orchestration.router import is_escalation_query, is_tier1_query
     
     class MockMessage:
         def __init__(self, text: str):

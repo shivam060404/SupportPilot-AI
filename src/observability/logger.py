@@ -3,6 +3,11 @@ src/observability/logger.py
 ────────────────────────────
 Structured JSON logger built on structlog.
 
+Production enhancements:
+  - PII redaction processor (scrubs emails, SSNs, phone numbers, etc.)
+  - Secrets filter processor (scrubs API keys, tokens, passwords)
+  - Configurable log level per environment
+
 Usage
 -----
     from src.observability.logger import get_logger
@@ -14,7 +19,7 @@ Each log record includes:
   - level
   - logger name
   - correlation/trace_id (if set via context)
-  - arbitrary key-value pairs
+  - arbitrary key-value pairs (PII/secret scrubbed)
 """
 from __future__ import annotations
 
@@ -46,12 +51,21 @@ def configure_logging() -> None:
         level=log_level,
     )
 
+    # Lazy import to avoid circular imports (core/middleware imports logger)
+    try:
+        from core.middleware.secrets_filter import SecretsFilterProcessor
+        from core.middleware.pii_redaction import PIIRedactionProcessor
+        privacy_processors: list[Any] = [SecretsFilterProcessor(), PIIRedactionProcessor()]
+    except ImportError:
+        privacy_processors = []
+
     shared_processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.processors.StackInfoRenderer(),
+        *privacy_processors,  # PII + secrets redaction
     ]
 
     if settings.app_env == "development":

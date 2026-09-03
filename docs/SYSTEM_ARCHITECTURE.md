@@ -47,13 +47,15 @@ Design principle: **the LLM decides *what* to do; deterministic code decides *wh
 | Component | File(s) | Responsibility |
 |---|---|---|
 | **Web UI** | `static/index.html`, `styles.css` | Chat interface, approvals bell/panel, renders tool-trace chips + RAG source citations, restores sessions |
-| **API layer** | `src/api/main.py`, `routes/*` | HTTP surface, validation via Pydantic schemas, trace-ID lifecycle, error mapping |
-| **Middleware** | `src/api/middleware.py` | Per-request trace ID (`x-trace-id`), structured access logs, contextvar binding |
-| **Supervisor / workflow** | `src/agents/supervisor_agent.py` | Builds MAF workflow, conditional routing (incl. sticky approval routing), transcript persistence |
-| **Tier-1 agent** | `prompts.py` | Grounded troubleshooting; tools: KB search, service status, ticket create/get |
-| **Tier-2 agent** | `escalation_agent.py`, `prompts_approval.py` | Lockouts/AD matters; MCP read-only lookups + `request_approval` / `execute_approved_action` |
-| **History provider** | `sqlite_history_provider.py` | Async MAF `HistoryProvider`; idempotent message persistence |
+| **API layer** | `src/api/main.py`, `src/api/routes/*` | HTTP surface, validation via Pydantic schemas, trace-ID lifecycle, error mapping |
+| **Middleware** | `core/middleware/logging_middleware.py` | Per-request trace ID (`x-trace-id`), structured access logs, contextvar binding |
+| **Supervisor / workflow** | `core/orchestration/router.py` | Builds MAF workflow, conditional routing (incl. sticky approval routing) |
+| **Tier-1 agent** | `core/orchestration/agents/tier1_agent.py`, `core/orchestration/prompts/tier1_prompt.py` | Grounded troubleshooting; tools: KB search, service status, ticket create/get |
+| **Tier-2 agent** | `core/orchestration/agents/tier2_agent.py`, `core/orchestration/prompts/tier2_prompt.py` | Lockouts/AD matters; MCP read-only lookups + `request_approval` / `execute_approved_action` |
+| **History provider** | `core/orchestration/providers/history_provider.py` | Async MAF `HistoryProvider`; idempotent message persistence |
 | **Tools** | `src/tools/*` | `@af.tool` functions wrapped by trace decorator; all guardrails applied here |
+| **Guardrails** | `core/guardrails/*` | PII redaction, Prompt injection detection, Output hallucination/policy checks |
+| **Audit Logger** | `core/audit/audit_logger.py` | Structured JSON auditing for sensitive business events |
 | **Approval gate** | `src/tools/approval.py` | `request_approval`, `execute_approved_action` — DB-verified human-in-the-loop |
 | **Business services** | `src/services/ad_directory.py` | Mock AD logic shared by MCP server and guarded executor |
 | **MCP server** | `src/mcp_server.py` | Stdio FastMCP server exposing **read-only** AD lookups only |
@@ -326,10 +328,10 @@ Handled in code; must be preserved across upgrades:
 
 | Constraint | Where handled |
 |---|---|
-| Use `OpenAIChatCompletionClient`, not `OpenAIChatClient` (no Responses API on Groq) | `supervisor_agent.py` |
+| Use `OpenAIChatCompletionClient`, not `OpenAIChatClient` (no Responses API on Groq) | `core/orchestration/providers/groq_client.py` |
 | Harness flags: `disable_web_search=True`, `disable_todo=True`, `disable_mode=True` (Groq rejects injected params/tool schemas) | both agents |
-| Custom `HistoryProvider.get_messages/save_messages` **must be `async`** | `sqlite_history_provider.py` |
-| Workflow routers must `ctx.send_message(...)`; `ctx.yield_output()` terminates the run | `TriageExecutor` |
-| Router output wrapped as `AgentExecutorRequest(messages, should_respond=True)` to preserve conversation chain | `TriageExecutor` |
-| MCP stdio command = `sys.executable`; server self-inserts project root into `sys.path` | `escalation_agent.py`, `mcp_server.py` |
+| Custom `HistoryProvider.get_messages/save_messages` **must be `async`** | `core/orchestration/providers/history_provider.py` |
+| Workflow routers must `ctx.send_message(...)`; `ctx.yield_output()` terminates the run | `core/orchestration/router.py` |
+| Router output wrapped as `AgentExecutorRequest(messages, should_respond=True)` to preserve conversation chain | `core/orchestration/router.py` |
+| MCP stdio command = `sys.executable`; server self-inserts project root into `sys.path` | `core/orchestration/agents/tier2_agent.py`, `src/mcp_server.py` |
 | `mcp>=1.2,<2.0` pinned (SDK 2.x removed `FastMCP`) | `requirements.txt` |
