@@ -88,9 +88,9 @@ app = FastAPI(
     ),
     version="1.0.0-phase6",
     lifespan=lifespan,
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
 
 from core.middleware.logging_middleware import EnhancedLoggingMiddleware
