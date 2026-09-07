@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import os
 import pytest
-from src.persistence.database import init_db
-from src.persistence.repositories import TicketRepository
+from backend.app.persistence.database import init_db
+from backend.app.persistence.repositories import TicketRepository
 
 os.environ.setdefault("GROQ_API_KEY", "test-key-not-real")
 

@@ -1,10 +1,10 @@
 """
-src/mcp_server.py
+backend/app/mcp/server.py
 ─────────────────
 A standard I/O (stdio) MCP server that provides mock Active Directory
 capabilities. Built using the official `mcp` Python SDK.
 
-Business logic lives in src/services/ad_directory.py so the guarded,
+Business logic lives in backend/app/services/ad_directory.py so the guarded,
 approval-checked execution path and this MCP server stay in sync.
 """
 import sys
@@ -18,7 +18,7 @@ if str(_ROOT) not in sys.path:
 
 from mcp.server.fastmcp import FastMCP
 
-from src.services.ad_directory import check_account_status, get_manager_info, unlock_account
+from backend.app.services.ad_directory import check_account_status, get_manager_info, unlock_account
 
 # Create a FastMCP server
 mcp = FastMCP("Active Directory Server")

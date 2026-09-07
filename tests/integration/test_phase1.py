@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 os.environ.setdefault("GROQ_API_KEY", "test-key-not-real")
 
 from httpx import AsyncClient, ASGITransport
-from src.api.main import app
-from config import get_settings, Settings
+from backend.app.api.main import app
+from backend.app.core.config import get_settings, Settings
 
 
 # ── Config Tests ──────────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ def test_settings_cors_list():
 
 @pytest.fixture
 def mock_agent():
-    """Replace SupportAgent with a fast mock that returns a canned response."""
+    """Replace the support agent with a fast mock that returns a canned response."""
     agent = MagicMock()
     agent.chat = AsyncMock(return_value={
         "session_id": "sess-test-123",

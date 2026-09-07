@@ -12,15 +12,15 @@ import pytest
 import pytest_asyncio
 import agent_framework as af
 
-from core.orchestration.agents.tier1_agent import SupportAgent
-from core.orchestration.router import is_escalation_query, is_tier1_query
+from backend.app.ai.agents.knowledgeable_it_support_agent import KnowledgeableITSupportAgent
+from backend.app.ai.router import is_escalation_query, is_tier1_query
 
 os.environ.setdefault("GROQ_API_KEY", "test-key-not-real")
 
 @pytest.mark.asyncio
 async def test_workflow_routing_escalation():
     # We will just verify the TriageExecutor edge conditions.
-    from core.orchestration.router import is_escalation_query, is_tier1_query
+    from backend.app.ai.router import is_escalation_query, is_tier1_query
     
     class MockMessage:
         def __init__(self, text: str):
@@ -39,7 +39,7 @@ async def test_workflow_routing_escalation():
 def test_mcp_server_exports():
     """Verify that the MCP server script defines the read-only AD tools."""
     import importlib.util
-    spec = importlib.util.spec_from_file_location("mcp_server", "src/mcp_server.py")
+    spec = importlib.util.spec_from_file_location("mcp_server", "backend/app/mcp/server.py")
     mcp_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mcp_module)
 
@@ -50,7 +50,7 @@ def test_mcp_server_exports():
 
 def test_mcp_server_does_not_expose_unlock():
     """The sensitive unlock capability must NOT be reachable via MCP tools."""
-    src_text = open("src/mcp_server.py").read()
+    src_text = open("backend/app/mcp/server.py").read()
     assert "@mcp.tool" in src_text
     assert 'def ad_check_account_status' in src_text
     assert 'def ad_get_manager_info' in src_text
@@ -88,9 +88,9 @@ def test_tier1_routing(text):
 
 def test_sticky_routing_on_open_approval(monkeypatch):
     """An unresolved approval keeps follow-ups in Tier 2 even without keywords."""
-    from src.persistence.database import init_db
-    from src.persistence.repositories import ApprovalRepository
-    from src.observability.request_context import set_request_context, clear_request_context
+    from backend.app.persistence.database import init_db
+    from backend.app.persistence.repositories import ApprovalRepository
+    from backend.app.observability.request_context import set_request_context, clear_request_context
     init_db()
     sid = "sticky-routing-session"
     req = ApprovalRepository.request_approval(session_id=sid, action="unlock_account", target="a@b.com")

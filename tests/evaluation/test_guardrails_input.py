@@ -3,9 +3,9 @@ tests/test_guardrails_input.py
 ───────────────────────────────
 Unit tests for input guardrails.
 """
-from core.guardrails.input.prompt_injection import PromptInjectionGuardrail
-from core.guardrails.input.prompt_safety import PromptSafetyGuardrail
-from core.guardrails.input.input_validation import InputValidationGuardrail
+from backend.app.ai.guardrails.input.prompt_injection import PromptInjectionGuardrail
+from backend.app.ai.guardrails.input.prompt_safety import PromptSafetyGuardrail
+from backend.app.ai.guardrails.input.input_validation import InputValidationGuardrail
 
 def test_prompt_injection_guardrail():
     guardrail = PromptInjectionGuardrail()

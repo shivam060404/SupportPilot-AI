@@ -1,288 +1,270 @@
 # SupportPilot AI
 
-> **AI-powered IT Support Agent** built with **Microsoft Agent Framework (MAF) 1.14.0**, Groq (`openai/gpt-oss-120b`), FastAPI, RAG, MCP, and a code-enforced human-approval gate.
+SupportPilot AI is an AI-assisted IT support platform for employee
+troubleshooting, knowledge retrieval, ticket creation, service-status checks,
+and controlled escalation of privileged account requests.
 
+The repository is deliberately split into two deployable applications:
+
+- **Backend:** Python, FastAPI, SQLAlchemy, Alembic, PostgreSQL, ChromaDB, and
+  the Microsoft Agent Framework.
+- **Frontend:** Next.js and React. It owns presentation and browser interaction
+  only; it does not contain AI, authorization, persistence, or business rules.
+
+The design goal is a system that is straightforward to review, operate, test,
+and extend without creating duplicate implementations or unsafe model-driven
+authorization.
+
+## What the system does
+
+1. An employee selects an issue category and submits a message in the Next.js
+   client.
+2. The frontend sends JSON to `POST /api/v1/chat`.
+3. FastAPI validates the request, creates or resumes a session, and establishes
+   trace/request context.
+4. Input guardrails validate content, detect prompt injection, detect PII, and
+   enforce safety and scope rules.
+5. Deterministic triage routes normal support questions to the IT support agent
+   and sensitive account/access questions to the privileged-access escalation
+   agent.
+6. The agent can retrieve approved knowledge, check service status, create or
+   inspect tickets, or begin a human approval workflow.
+7. Output guardrails validate and sanitize the generated response.
+8. The API returns the answer, session identifier, trace identifier, tool trace,
+   grounding metadata, and knowledge sources where available.
+
+Model output never grants privileged access. Sensitive actions require a
+persisted approval record and an explicit execution-side check.
+
+## Repository structure
+
+```text
+.
+├── backend/
+│   ├── app/
+│   │   ├── api/                 FastAPI app, routes, schemas, lifecycle
+│   │   ├── ai/
+│   │   │   ├── agents/          Support and privileged-access agents
+│   │   │   ├── evaluation/      AI evaluation boundary
+│   │   │   ├── guardrails/      Input/output safety pipeline
+│   │   │   ├── memory/          AI memory boundary
+│   │   │   ├── prompts/         Versioned agent instructions
+│   │   │   ├── rag/             Chunking, embedding, ingestion, retrieval
+│   │   │   └── tools/           Ticket, service, approval, and KB tools
+│   │   ├── core/
+│   │   │   ├── audit/           Audit logging concerns
+│   │   │   ├── config/          Environment-backed settings
+│   │   │   ├── middleware/      Auth, logging, rate limiting, redaction
+│   │   │   └── privacy/        PII patterns, redaction, retention
+│   │   ├── integrations/        Groq client and PostgreSQL history adapter
+│   │   ├── mcp/                 Active Directory MCP server
+│   │   ├── observability/       Logs, metrics, tracing, tool traces
+│   │   ├── persistence/         SQLAlchemy engine, models, repositories
+│   │   └── services/             External/domain service adapters
+│   ├── alembic/                 PostgreSQL migrations
+│   ├── tests/                   Backend-only test boundary
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── requirements-dev.txt
+├── data/
+│   ├── knowledge_base/          Markdown source articles
+│   └── runtime/                 Ignored generated Chroma data
+├── frontend/
+│   ├── src/app/                 Next.js App Router pages and styles
+│   ├── src/components/          Reusable UI components
+│   ├── src/features/            Feature-specific UI modules
+│   ├── src/hooks/               React hooks
+│   ├── src/lib/                 Frontend utilities
+│   ├── src/services/            Backend API clients
+│   ├── src/types/               Frontend contract types
+│   ├── public/                  Browser assets
+│   └── Dockerfile
+├── tests/
+│   ├── integration/              API, persistence, workflow, approval tests
+│   ├── e2e/                     Browser/system test boundary
+│   ├── evaluation/              Guardrail and RAG quality tests
+│   └── load/                    Load/system test boundary
+├── docs/                        Operational and supporting documentation
+├── ARCHITECTURE.md              Detailed system architecture
+├── docker-compose.yml            Local multi-service environment
+├── docker-compose.prod.yml       Production-oriented Compose topology
+├── alembic.ini                  Migration entry point
+├── .env.example                 Safe configuration template
+└── Makefile                     Common developer commands
 ```
-Browser Chat UI (approvals panel, tool/source rendering)
-      ↓
-    FastAPI  ── REST: chat · tickets · sessions · services · approvals
-      ↓
-Microsoft Agent Framework WorkflowBuilder (deterministic routing)
-      ↙                              ↘
-Tier-1 IT Agent                  Tier-2 Escalation Agent
-RAG · service status · tickets   MCP AD lookups + approval-gate tools
-      │                               │
-      └─────── Input Guardrails ──────┘ (PII redaction, prompt injection)
-      ↘                              ↙
-        Groq openai/gpt-oss-120b (OpenAI-compatible chat-completions endpoint)
-                     ↓
-     SQLite (tickets · audit log · transcripts · approvals)
-     ChromaDB (knowledge-base vectors)
-```
 
-## Human-in-the-loop by design
+## Prerequisites
 
-Sensitive actions (e.g. `unlock_account`) are **never** reachable by the LLM directly:
+- Python 3.11 or newer
+- Node.js 20 or newer and npm
+- Docker Desktop or Docker Engine with Compose
+- A Groq API key for live agent execution
 
-1. The Tier-2 agent calls `request_approval` → a `PENDING` record is stored and audited.
-2. A human approves/rejects via the UI panel or `POST /api/v1/approvals/{id}/approve|reject`.
-3. Only `execute_approved_action` can run the capability — it independently verifies a matching `APPROVED` record in the database before touching the business service. Mismatched targets, replays (`ALREADY_EXECUTED`), rejections and unapproved attempts are all blocked and audit-logged.
+## Configuration
 
-The sensitive capability is deliberately **not** exposed on the MCP server; enforcement lives outside the LLM.
-
-### Sticky escalation routing
-
-Routing is deterministic keyword pre-triage **plus** a sticky rule: while a session has an unresolved approval request (`PENDING` or `APPROVED`-not-yet-executed), all follow-up messages stay with the Tier-2 agent — so natural phrasing like *"it's approved, go ahead"* correctly triggers the guarded execution instead of falling back to Tier 1.
-
----
-
-## Quick Start
-
-### 1. Prerequisites
-- Python 3.11+
-- A free [Groq API key](https://console.groq.com)
-
-### 2. Set up environment
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### 3. Configure environment
+Copy the committed template and provide local values:
 
 ```bash
 cp .env.example .env
-# Edit .env and set your real GROQ_API_KEY
 ```
 
-Without a key the server still boots — chat returns a clear configuration error while every other endpoint works.
+Important variables:
 
-### 4. Run
+| Variable | Purpose |
+| --- | --- |
+| `GROQ_API_KEY` | LLM provider credential; required for live chat |
+| `GROQ_MODEL` | Groq/OpenAI-compatible model identifier |
+| `DATABASE_URL` | SQLAlchemy PostgreSQL connection URL |
+| `CORS_ORIGINS` | Comma-separated browser origins |
+| `CHROMA_PERSIST_DIR` | Runtime Chroma persistence directory |
+| `EMBEDDING_MODEL` | Sentence-transformer embedding model |
+| `NEXT_PUBLIC_API_URL` | Browser-visible backend base URL |
+| `API_KEY_REQUIRED` / `API_KEY` | Optional API-key middleware controls |
+
+Never commit `.env`, provider credentials, database passwords, generated
+Chroma data, or local database files.
+
+## Run locally with Docker
+
+The recommended path starts PostgreSQL, the backend, and the frontend together:
 
 ```bash
-# Using the virtual environment directly:
-.venv/bin/python -m uvicorn src.api.main:app --reload --port 8000
-
-# Or after activating .venv:
-source .venv/bin/activate
-uvicorn src.api.main:app --reload --port 8000
-```
-
-On startup the app auto-ingests `knowledge_base/` into ChromaDB if the vector store is empty. To force a re-index after editing articles:
-
-```bash
-python -m src.rag.ingestor
-```
-
-### 5. Open the chat UI
-
-Visit **http://localhost:8000**. Conversations survive page reloads (session restore via the history API) and every turn is durably transcripted to SQLite.
-
-**Try the approval flow:** ask *"My AD account is locked, please unlock it"* → the Tier-2 agent investigates via MCP, files an approval request, and pauses. A red bell appears in the header — approve it, then say *"it's approved, go ahead"*. The agent verifies the approval and executes.
-
-> **Model note:** `GROQ_MODEL` defaults to `openai/gpt-oss-120b`. The older `llama-3.3-70b-versatile` ID has been retired from Groq's catalog; any current chat model with tool-calling support works.
-
----
-
-## Live-verified behaviour (real Groq calls)
-
-| Scenario | Verified result |
-|----------|-----------------|
-| Tier-1 VPN issue | Calls `search_knowledge_base`, cites *VPN Troubleshooting Guide* with relevance scores |
-| Multi-turn follow-up | Remembers prior turns from SQLite-backed transcript + session state |
-| Ticket creation | Returns a real ticket ID, retrievable via `GET /tickets/{id}` |
-| Service status | Reads the allow-listed registry (Salesforce → Outage), never invents status |
-| Account lockout | Routed to Tier-2, verified via MCP, files `request_approval`, stops and waits |
-| Human approves in UI/REST | Sticky routing keeps Tier-2; `execute_approved_action` validates and executes |
-| Unapproved execution attempt | Blocked (`DENIED` / `ALREADY_EXECUTED`) and written to the audit log |
-
-## Known limitations
-
-- Latency ranges ~2–60s per reply depending on tool-loop depth.
-- Agent *context* across server restarts is best-effort (framework-managed); transcripts are always durable in SQLite. Full restart-resilient context would use MAF workflow checkpointing.
-
----
-
-## API Reference
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Browser chat UI |
-| `/api/v1/chat` | POST | Send a message to the agent (returns reply + tool trace + RAG sources) |
-| `/api/v1/health` | GET | Liveness check |
-| `/api/v1/tickets` | GET/POST | List / create tickets |
-| `/api/v1/tickets/{id}` | GET | Ticket details |
-| `/api/v1/sessions/{id}/history` | GET | Chat history for a session |
-| `/api/v1/services/status` | GET | Status of allow-listed services |
-| `/api/v1/approvals` | GET | List approvals (filter by `status`, `session_id`) |
-| `/api/v1/approvals/{id}` | GET | Approval details |
-| `/api/v1/approvals/{id}/approve` | POST | **Human** grants approval |
-| `/api/v1/approvals/{id}/reject` | POST | **Human** rejects approval |
-| `/api/docs` | GET | Swagger UI |
-
-### POST /api/v1/chat
-
-```json
-// Request
-{
-  "message": "My VPN keeps disconnecting every 10 minutes.",
-  "session_id": "optional-uuid-for-multi-turn",
-  "category": "VPN"
-}
-
-// Response (abridged)
-{
-  "session_id": "550e8400-...",
-  "response": "⏳ IN PROGRESS — ...",
-  "trace_id": "abc123...",
-  "tool_trace": [{"tool": "search_knowledge_base", "phase": "finished", "duration_ms": 412.1}],
-  "sources": [{"title": "VPN Troubleshooting Guide", "category": "VPN", "score": 0.87}]
-}
-```
-
----
-
-## Guardrails & Security
-
-- API keys live only in `.env`; never in prompts, source or logs.
-- Service lookups are allow-listed; unknown names are blocked and audited.
-- Ticket inputs are validated (priority enum, non-empty summary/category).
-- KB search applies a low-confidence threshold — below it the tool instructs the model to clarify/escalate instead of guessing.
-- Sensitive executions require a verified human approval record (see above); every decision point writes an `AuditLog` row (`approval_requested`, `approval_approved/rejected`, `sensitive_action_executed`, `security_blocked_*`).
-- Structured JSON logs with per-request trace IDs; dev mode uses pretty console output.
-
----
-
-## Running Tests
-
-```bash
-source .venv/bin/activate
-PYTHONPATH=. pytest tests/ -v
-```
-
-Covers: config/API contracts, DB + repositories, RAG behaviour (mocked), deterministic + sticky routing conditions, guardrails/allow-lists, history idempotency, and the full approval lifecycle including REST decisions and replay protection. (48 tests)
-
----
-
-## Project Structure
-
-```
-SupportPilot-AI/
-├── config/
-│   ├── __init__.py                    # Settings (Pydantic models)
-│   └── settings.py                    # Re-export
-│
-├── core/                              # Central business logic & safeguards
-│   ├── audit/                         # Structured audit logging
-│   │   └── audit_logger.py
-│   ├── guardrails/                    # Input + Output guardrails pipeline
-│   │   ├── base.py                    # Abstract GuardrailBase class
-│   │   ├── pipeline.py                # GuardrailPipeline orchestrator
-│   │   ├── input/                     # Pre-execution validation
-│   │   │   ├── contextual_compliance.py
-│   │   │   ├── input_validation.py    # Schema, length, character sanity
-│   │   │   ├── pii_detector.py        # SSN, email, phone, CC detection
-│   │   │   ├── prompt_injection.py    # Injection & jailbreak detection
-│   │   │   └── prompt_safety.py       # Toxicity & safety classifier
-│   │   └── output/                    # Post-execution validation
-│   │       ├── content_moderation.py  # Harmful output filter
-│   │       ├── hallucination_check.py # Grounding & consistency check
-│   │       ├── output_validation.py   # Schema & format verification
-│   │       └── pii_leakage.py         # Outbound PII sanitization
-│   ├── middleware/                    # Security & observability middleware
-│   │   ├── auth.py                    # API key validation
-│   │   ├── logging_middleware.py      # Request lifecycle & trace-ID logging
-│   │   ├── pii_redaction.py           # Log sanitization
-│   │   ├── rate_limiter.py            # Token-bucket rate limiting
-│   │   └── secrets_filter.py          # API key & token masking in logs
-│   ├── orchestration/                 # Multi-agent coordination layer
-│   │   ├── router.py                  # Triage executor & sticky approval routing
-│   │   ├── agents/                    # Specialized MAF agents
-│   │   │   ├── tier1_agent.py         # Tier-1 IT Support agent
-│   │   │   └── tier2_agent.py         # Tier-2 Escalation & approval agent
-│   │   ├── prompts/                   # Isolated system prompts
-│   │   │   ├── tier1_prompt.py
-│   │   │   └── tier2_prompt.py
-│   │   └── providers/                 # LLM & state providers
-│   │       ├── groq_client.py         # Groq OpenAI-compatible client factory
-│   │       └── history_provider.py    # Async SQLite conversation history
-│   └── privacy/                       # PII redaction engine
-│       ├── pii_patterns.py            # Regex patterns for sensitive data
-│       ├── redactor.py                # Redaction & masking engine
-│       └── retention.py               # Data lifecycle & retention
-│
-├── knowledge_base/                    # Curated IT articles (*.md with frontmatter)
-├── static/                            # Web UI (index.html, styles.css)
-│
-├── src/
-│   ├── api/                           # FastAPI application layer
-│   │   ├── main.py                    # Entry point & lifespan management
-│   │   ├── schemas.py                 # Pydantic request/response schemas
-│   │   └── routes/                    # chat · tickets · sessions · services · approvals
-│   ├── observability/                 # Tracing & telemetry
-│   │   ├── logger.py                  # structlog configuration
-│   │   ├── metrics.py                 # Prometheus latency & error metrics
-│   │   ├── request_context.py         # Session & trace contextvars
-│   │   ├── sampling.py                # Trace sampling policies
-│   │   ├── tooltrace.py               # Tool execution performance collector
-│   │   └── tracing.py                 # OpenTelemetry distributed tracing
-│   ├── persistence/                   # Data layer
-│   │   ├── database.py                # SQLAlchemy engine & session factory
-│   │   ├── models.py                  # Ticket · AuditLog · SessionMessage · ApprovalRequest
-│   │   └── repositories.py            # Repository pattern CRUD & dedup
-│   ├── rag/                           # Production RAG pipeline
-│   │   ├── chunker.py                 # Semantic chunking with overlap
-│   │   ├── embedder.py                # MiniLM embedding pipeline
-│   │   ├── ingestor.py                # Markdown vector ingestor
-│   │   ├── reranker.py                # Cross-encoder similarity reranking
-│   │   └── retriever.py               # Scored hybrid retrieval (+ category filter)
-│   ├── services/                      # Business integrations
-│   │   └── ad_directory.py            # Active Directory simulation
-│   ├── tools/                         # Deterministic agent tools
-│   │   ├── approval.py                # request_approval · execute_approved_action
-│   │   ├── check_service_status.py    # Allow-listed service health checks
-│   │   ├── create_ticket.py           # Validated IT ticketing
-│   │   ├── get_ticket_status.py       # Ticket state queries
-│   │   └── search_knowledge_base.py   # Grounded RAG retrieval tool
-│   └── mcp_server.py                  # FastMCP stdio server (read-only AD tools)
-│
-└── tests/                             # Full test suite (56 unit & integration tests)
-```
-
----
-
-## Technology Stack
-
-| Component | Technology |
-|-----------|-----------|
-| Agent Framework | Microsoft Agent Framework 1.14.0 (WorkflowBuilder, harness agents, MCP tool) |
-| LLM | Groq `openai/gpt-oss-120b` via OpenAI-compatible **chat-completions** endpoint |
-| API | FastAPI + uvicorn |
-| Persistence | SQLAlchemy 2 + SQLite (PostgreSQL-ready) |
-| RAG | ChromaDB + sentence-transformers MiniLM |
-| MCP | official `mcp<2` SDK (stdio server) |
-| Settings / Logging | pydantic-settings / structlog |
-| Testing | pytest + pytest-asyncio + httpx |
-
-### MAF/Groq compatibility notes
-
-These integration quirks are handled in code — keep them in mind when upgrading:
-
-- Use `OpenAIChatCompletionClient` (**not** `OpenAIChatClient`) — Groq has no Responses API.
-- Harness flags required for Groq: `disable_web_search=True`, `disable_todo=True`, `disable_mode=True`.
-- Custom `HistoryProvider` methods must be `async def` (MAF awaits them).
-- Workflow routers must use `ctx.send_message(...)`; `ctx.yield_output()` ends the run.
-- The MCP stdio server is spawned with `sys.executable` and self-registers the project root on `sys.path`.
-
----
-
-## Docker
-
-```bash
-cp .env.example .env   # set GROQ_API_KEY
+cp .env.example .env
+# Edit .env and set GROQ_API_KEY
 docker compose up --build
 ```
 
-The SQLite DB is volume-mounted so tickets/sessions/approvals persist across restarts; the knowledge base is auto-ingested at first boot.
+Endpoints:
+
+- Frontend: <http://localhost:3000>
+- Backend API: <http://localhost:8000>
+- OpenAPI UI: <http://localhost:8000/docs>
+- ReDoc: <http://localhost:8000/redoc>
+- Metrics: <http://localhost:8000/metrics>
+- Health: <http://localhost:8000/api/v1/health>
+- PostgreSQL: `localhost:5432`
+
+Stop services with:
+
+```bash
+docker compose down
+```
+
+The production-oriented topology is:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+For production, use externally managed secrets and persistent PostgreSQL
+storage. Do not use the example credentials outside local development.
+
+## Run without Docker
+
+Start PostgreSQL separately, set `DATABASE_URL`, then create a Python
+environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head
+uvicorn backend.app.api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+In another terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Database and migrations
+
+PostgreSQL is the application system of record for tickets, approvals, audit
+logs, and conversation messages. SQLAlchemy provides the engine, sessions,
+models, and repositories. Alembic is the schema authority.
+
+Apply migrations:
+
+```bash
+alembic upgrade head
+```
+
+Create a migration after a model change:
+
+```bash
+alembic revision --autogenerate -m "describe the schema change"
+alembic upgrade head
+```
+
+Application startup performs a connection/readiness check. It does not silently
+create production tables; schema changes must be explicit and reviewable.
+
+Chroma remains separate from PostgreSQL because the current workload is a
+small, document-oriented knowledge base with an existing Chroma retrieval
+pipeline. Generated vector data belongs in ignored runtime storage, while
+Markdown articles under `data/knowledge_base/` remain the source of truth.
+
+## Knowledge base ingestion
+
+Knowledge articles are Markdown files with optional metadata/frontmatter. The
+ingestion pipeline:
+
+1. Reads source articles from `data/knowledge_base/`.
+2. Validates/defaults document metadata.
+3. Splits content into overlapping semantic chunks.
+4. Generates embeddings.
+5. Rebuilds the `support_kb` Chroma collection.
+6. Stores runtime vector data under `data/runtime/chroma/`.
+
+The API also checks whether retrieval is available during startup and attempts
+non-fatal knowledge-base initialization. A retrieval failure must not be
+confused with an authorization decision or a database failure.
+
+## Testing and validation
+
+Run backend and AI tests:
+
+```bash
+pytest
+```
+
+Run frontend checks:
+
+```bash
+cd frontend
+npm run typecheck
+npm run build
+```
+
+Validate infrastructure and migrations:
+
+```bash
+docker compose config
+docker compose -f docker-compose.prod.yml config
+alembic upgrade head
+```
+
+Test responsibilities:
+
+- `tests/evaluation/`: guardrails, RAG behavior, and AI quality boundaries.
+- `tests/integration/`: API contracts, persistence, approvals, and workflow
+  routing.
+- `tests/e2e/`: browser-to-backend flows.
+- `tests/load/`: concurrency, latency, and throughput scenarios.
+- `backend/tests/`: backend-local tests that should not require browser tooling.
+
+## Design principles
+
+- Keep API handlers thin; business and AI orchestration belongs below the API.
+- Keep one source of truth for each capability.
+- Keep frontend code independent from Python internals.
+- Make privileged operations deterministic and approval-gated.
+- Prefer explicit failures and observable errors over silent fallbacks.
+- Keep configuration environment-based and secrets out of source control.
+- Make migrations, prompts, guardrails, and evaluation boundaries reviewable.
+
+For the full dependency model and request lifecycle, read
+[`ARCHITECTURE.md`](ARCHITECTURE.md).

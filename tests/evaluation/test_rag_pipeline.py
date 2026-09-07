@@ -3,7 +3,7 @@ tests/test_rag_pipeline.py
 ──────────────────────────
 Unit tests for the RAG chunker and retriever components.
 """
-from src.rag.chunker import SemanticChunker
+from backend.app.ai.rag.chunker import SemanticChunker
 
 def test_semantic_chunker():
     chunker = SemanticChunker(chunk_size=50, chunk_overlap=10)

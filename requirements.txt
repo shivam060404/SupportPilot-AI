@@ -26,6 +26,8 @@ python-dotenv>=1.2.0
 
 # ── Persistence (Phase 2+) ────────────────────────────────────────────────────
 sqlalchemy>=2.0.0
+psycopg[binary]>=3.2.3
+alembic>=1.14.0
 
 # ── Structured Logging ───────────────────────────────────────────────────────
 structlog>=25.0.0

@@ -16,9 +16,9 @@ import pytest
 
 os.environ.setdefault("GROQ_API_KEY", "test-key-not-real")
 
-from src.persistence.database import init_db
-from src.tools.check_service_status import _check_service_status_impl, SERVICE_ALLOWLIST
-from src.persistence.repositories import (
+from backend.app.persistence.database import init_db
+from backend.app.ai.tools.check_service_status import _check_service_status_impl, SERVICE_ALLOWLIST
+from backend.app.persistence.repositories import (
     TicketRepository,
     SessionRepository,
     AuditLogRepository,
@@ -82,7 +82,7 @@ class _FakeRetriever:
 
 
 def test_kb_category_filter_passed_through(monkeypatch):
-    import src.tools.search_knowledge_base as kbmod
+    import backend.app.ai.tools.search_knowledge_base as kbmod
     fake = _FakeRetriever([{
         "content": "Restart the VPN client.",
         "metadata": {"title": "VPN Guide", "category": "VPN"},
@@ -96,7 +96,7 @@ def test_kb_category_filter_passed_through(monkeypatch):
 
 
 def test_kb_low_confidence_rule(monkeypatch):
-    import src.tools.search_knowledge_base as kbmod
+    import backend.app.ai.tools.search_knowledge_base as kbmod
     monkeypatch.setattr(kbmod, "retriever", _FakeRetriever([
         {"content": "irrelevant", "metadata": {"title": "X"}, "score": 0.05},
         {"content": "also irrelevant", "metadata": {}, "score": None, },
@@ -111,7 +111,7 @@ def test_kb_low_confidence_rule(monkeypatch):
 
 
 def test_kb_no_results(monkeypatch):
-    import src.tools.search_knowledge_base as kbmod
+    import backend.app.ai.tools.search_knowledge_base as kbmod
     monkeypatch.setattr(kbmod, "retriever", _FakeRetriever([]))
     data = json.loads(kbmod.search_knowledge_base("anything"))
     assert data["status"] == "no_trusted_results"
@@ -133,7 +133,7 @@ def test_history_save_is_idempotent():
 
 
 def _audit_count(action: str) -> int:
-    from src.persistence.database import SessionLocal
-    from src.persistence.models import AuditLog
+    from backend.app.persistence.database import SessionLocal
+    from backend.app.persistence.models import AuditLog
     with SessionLocal() as db:
         return db.query(AuditLog).filter(AuditLog.action == action).count()

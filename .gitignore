@@ -10,8 +10,14 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
-data/
-*.db
-*.sqlite3
+data/runtime/
+data/**/*.db
+data/**/*.sqlite3
+node_modules/
+.next/
+frontend/.next/
+frontend/node_modules/
+*.tsbuildinfo
+coverage.xml
 *.log
 .DS_Store

@@ -1,5 +1,5 @@
 """
-core/orchestration/router.py
+backend/app/ai/router.py
 ─────────────────────────────
 Routing logic to direct chat requests to either Tier-1 Support or Tier-2 Escalation.
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from src.observability.logger import get_logger
+from backend.app.observability.logger import get_logger
 
 log = get_logger(__name__)
 
@@ -45,7 +45,7 @@ def _has_open_approval_loop(session_id: Optional[str]) -> bool:
     if not session_id:
         return False
     try:
-        from src.persistence.repositories import ApprovalRepository
+        from backend.app.persistence.repositories import ApprovalRepository
         return any(
             r.status in {"PENDING", "APPROVED"}
             for r in ApprovalRepository.list_approvals(session_id=session_id, limit=10)
@@ -68,7 +68,7 @@ def is_escalation_query(payload: object) -> bool:
         return True
 
     try:
-        from src.observability.request_context import get_session_id
+        from backend.app.observability.request_context import get_session_id
         return _has_open_approval_loop(get_session_id())
     except Exception:
         return False

@@ -14,10 +14,10 @@ import json
 from httpx import AsyncClient, ASGITransport
 import agent_framework as af
 
-from src.api.main import app
-from src.persistence.database import init_db
-from src.persistence.repositories import SessionRepository
-from core.orchestration.providers.history_provider import SQLiteHistoryProvider
+from backend.app.api.main import app
+from backend.app.persistence.database import init_db
+from backend.app.persistence.repositories import SessionRepository
+from backend.app.integrations.history_provider import PostgreSQLHistoryProvider
 
 os.environ.setdefault("GROQ_API_KEY", "test-key-not-real")
 
@@ -26,9 +26,9 @@ def setup_db():
     init_db()
 
 @pytest.mark.asyncio
-async def test_sqlite_history_provider():
+async def test_postgresql_history_provider():
     """Verify that SQLiteHistoryProvider correctly serializes and deserializes MAF messages."""
-    provider = SQLiteHistoryProvider()
+    provider = PostgreSQLHistoryProvider()
     session_id = f"test-session-{__import__('uuid').uuid4()}"
 
     try:
@@ -48,7 +48,7 @@ async def test_sqlite_history_provider():
 
 @pytest.mark.asyncio
 async def test_tickets_api():
-    from src.persistence.repositories import TicketRepository
+    from backend.app.persistence.repositories import TicketRepository
     ticket = TicketRepository.create_ticket(summary="Test API Ticket", category="Test")
     
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

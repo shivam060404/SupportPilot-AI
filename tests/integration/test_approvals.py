@@ -17,10 +17,10 @@ from httpx import AsyncClient, ASGITransport
 
 os.environ.setdefault("GROQ_API_KEY", "test-key-not-real")
 
-from src.persistence.database import init_db
-from src.persistence.repositories import ApprovalRepository, AuditLogRepository
-from src.tools.approval import request_approval, execute_approved_action
-from src.api.main import app
+from backend.app.persistence.database import init_db
+from backend.app.persistence.repositories import ApprovalRepository, AuditLogRepository
+from backend.app.ai.tools.approval import request_approval, execute_approved_action
+from backend.app.api.main import app
 
 
 @pytest.fixture(autouse=True)
@@ -30,7 +30,7 @@ def setup_db():
 
 def _request(session_id="s-approval-test", action="unlock_account", target="locked.user@company.com"):
     """Create a PENDING approval through the real tool surface; return the parsed dict."""
-    from src.observability.request_context import set_request_context, clear_request_context
+    from backend.app.observability.request_context import set_request_context, clear_request_context
     set_request_context(session_id=session_id)
     try:
         payload = json.loads(request_approval(action=action, target=target, rationale="test rationale"))
@@ -117,8 +117,8 @@ def test_unknown_action_not_approvable():
 
 
 def _audit_count() -> int:
-    from src.persistence.database import SessionLocal
-    from src.persistence.models import AuditLog
+    from backend.app.persistence.database import SessionLocal
+    from backend.app.persistence.models import AuditLog
     with SessionLocal() as db:
         return db.query(AuditLog).count()
 

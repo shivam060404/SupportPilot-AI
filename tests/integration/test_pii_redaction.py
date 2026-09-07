@@ -3,7 +3,7 @@ tests/test_pii_redaction.py
 ───────────────────────────
 Tests for the PII redactor.
 """
-from core.privacy.redactor import PIIRedactor
+from backend.app.core.privacy.redactor import PIIRedactor
 
 def test_pii_redaction():
     redactor = PIIRedactor()

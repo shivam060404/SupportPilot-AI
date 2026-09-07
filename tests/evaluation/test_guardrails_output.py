@@ -3,9 +3,9 @@ tests/test_guardrails_output.py
 ───────────────────────────────
 Unit tests for output guardrails.
 """
-from core.guardrails.output.content_moderation import ContentModerationGuardrail
-from core.guardrails.output.pii_leakage import PIILeakageGuardrail
-from core.guardrails.output.hallucination_check import HallucinationCheckGuardrail
+from backend.app.ai.guardrails.output.content_moderation import ContentModerationGuardrail
+from backend.app.ai.guardrails.output.pii_leakage import PIILeakageGuardrail
+from backend.app.ai.guardrails.output.hallucination_check import HallucinationCheckGuardrail
 
 def test_content_moderation():
     guardrail = ContentModerationGuardrail()
