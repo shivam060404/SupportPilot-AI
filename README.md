@@ -62,8 +62,13 @@ persisted approval record and an explicit execution-side check.
 │   │   ├── persistence/         SQLAlchemy engine, models, repositories
 │   │   └── services/             External/domain service adapters
 │   ├── alembic/                 PostgreSQL migrations
-│   ├── tests/                   Backend-only test boundary
+│   ├── tests/
+│   │   ├── integration/         API, persistence, workflow, approval tests
+│   │   ├── evaluation/          Guardrail and RAG quality tests
+│   │   ├── e2e/                 Browser/system test boundary
+│   │   └── load/                Load/system test boundary
 │   ├── Dockerfile
+│   ├── alembic.ini              Migration entry point
 │   ├── requirements.txt
 │   └── requirements-dev.txt
 ├── data/
@@ -79,16 +84,11 @@ persisted approval record and an explicit execution-side check.
 │   ├── src/types/               Frontend contract types
 │   ├── public/                  Browser assets
 │   └── Dockerfile
-├── tests/
-│   ├── integration/              API, persistence, workflow, approval tests
-│   ├── e2e/                     Browser/system test boundary
-│   ├── evaluation/              Guardrail and RAG quality tests
-│   └── load/                    Load/system test boundary
+
 ├── docs/                        Operational and supporting documentation
 ├── ARCHITECTURE.md              Detailed system architecture
 ├── docker-compose.yml            Local multi-service environment
 ├── docker-compose.prod.yml       Production-oriented Compose topology
-├── alembic.ini                  Migration entry point
 ├── .env.example                 Safe configuration template
 └── Makefile                     Common developer commands
 ```
@@ -167,8 +167,8 @@ environment:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-alembic upgrade head
+pip install -r backend/requirements-dev.txt
+cd backend && alembic upgrade head
 uvicorn backend.app.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -189,12 +189,14 @@ models, and repositories. Alembic is the schema authority.
 Apply migrations:
 
 ```bash
+cd backend
 alembic upgrade head
 ```
 
 Create a migration after a model change:
 
 ```bash
+cd backend
 alembic revision --autogenerate -m "describe the schema change"
 alembic upgrade head
 ```
@@ -244,17 +246,15 @@ Validate infrastructure and migrations:
 ```bash
 docker compose config
 docker compose -f docker-compose.prod.yml config
-alembic upgrade head
+cd backend && alembic upgrade head
 ```
 
 Test responsibilities:
 
-- `tests/evaluation/`: guardrails, RAG behavior, and AI quality boundaries.
-- `tests/integration/`: API contracts, persistence, approvals, and workflow
-  routing.
-- `tests/e2e/`: browser-to-backend flows.
-- `tests/load/`: concurrency, latency, and throughput scenarios.
-- `backend/tests/`: backend-local tests that should not require browser tooling.
+- `backend/tests/evaluation/`: guardrails, RAG behavior, and AI quality boundaries.
+- `backend/tests/integration/`: API contracts, persistence, approvals, and workflow routing.
+- `backend/tests/e2e/`: browser-to-backend flows.
+- `backend/tests/load/`: concurrency, latency, and throughput scenarios.
 
 ## Design principles
 
